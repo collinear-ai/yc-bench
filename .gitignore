@@ -33,3 +33,6 @@ agent.md
 db/
 logs/
 results/
+
+# Claude session context — local only
+CLAUDE.md
