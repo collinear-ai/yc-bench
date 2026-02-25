@@ -20,7 +20,7 @@ The benchmark tests whether agents can manage compounding decisions: prestige sp
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                     DISCRETE-EVENT SIMULATION                           │
 │                                                                         │
-│  ┌─────────────┐    accept     ┌──────────┐   assign+dispatch           │
+│  ┌─────────────┐    accept    ┌──────────┐   assign+dispatch            │
 │  │   MARKET    │ ──────────►  │  PLANNED │ ──────────────────►          │
 │  │  100 tasks  │              └──────────┘                              │
 │  └─────────────┘                                                        │
