@@ -29,7 +29,7 @@ The benchmark tests whether agents can manage compounding decisions: prestige sp
 │        │   ┌────────────────────────── │  progress flushes    │         │
 │        │   │                           │  every sim-advance   │         │
 │        │   │                           └──────────┬───────────┘         │
-│        │   │  ┌────────────────────────────────────┘                    │
+│        │   │  ┌───────────────────────────────────┘                     │
 │        │   │  │  ETA solver fires TASK_COMPLETED event                  │
 │        │   │  ▼                                                         │
 │        │   │  ┌────────────────────────────────────────────────────┐    │
@@ -421,5 +421,16 @@ Common failure patterns across all bankrupt runs:
       "commands_executed": ["yc-bench company status -> {...}", ...]
     }
   ]
+}
+```
+
+Please cite our work if you find it useful and interesting!
+```bibtex
+@misc{collinear-ai2025ycbench,
+  author       = {{Collinear AI}},
+  title        = {{YC-Bench}: Your Company Bench — A Long-Horizon Coherence Benchmark for {LLM} Agents},
+  year         = {2025},
+  howpublished = {\url{https://github.com/collinear-ai/yc-bench}},
+  note         = {Accessed: 2026-02-25}
 }
 ```
