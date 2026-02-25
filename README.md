@@ -12,33 +12,33 @@ The benchmark tests whether agents can manage compounding decisions: prestige sp
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          AGENT (LLM)                                    │
 │                                                                         │
-│  Observes: company status · employee skills · market tasks · ledger    │
-│  Acts via: run_command("yc-bench <cmd>")  ·  scratchpad (persistent)   │
+│  Observes: company status · employee skills · market tasks · ledger     │
+│  Acts via: run_command("yc-bench <cmd>")  ·  scratchpad (persistent)    │
 └───────────────────────┬─────────────────────────────────────────────────┘
                         │ CLI commands (JSON responses)
                         ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                     DISCRETE-EVENT SIMULATION                           │
 │                                                                         │
-│  ┌─────────────┐    accept     ┌──────────┐   assign+dispatch          │
-│  │   MARKET    │ ──────────►  │  PLANNED │ ──────────────────►         │
-│  │  100 tasks  │              └──────────┘                             │
+│  ┌─────────────┐    accept     ┌──────────┐   assign+dispatch           │
+│  │   MARKET    │ ──────────►  │  PLANNED │ ──────────────────►          │
+│  │  100 tasks  │              └──────────┘                              │
 │  └─────────────┘                                                        │
-│        ▲ replenish                      ┌──────────────────────┐        │
-│        │                               │       ACTIVE         │        │
-│        │   ┌────────────────────────── │  progress flushes    │        │
-│        │   │                           │  every sim-advance   │        │
-│        │   │                           └──────────┬───────────┘        │
-│        │   │  ┌────────────────────────────────────┘                   │
-│        │   │  │  ETA solver fires TASK_COMPLETED event                 │
+│        ▲ replenish                     ┌──────────────────────┐         │
+│        │                               │       ACTIVE         │         │
+│        │   ┌────────────────────────── │  progress flushes    │         │
+│        │   │                           │  every sim-advance   │         │
+│        │   │                           └──────────┬───────────┘         │
+│        │   │  ┌────────────────────────────────────┘                    │
+│        │   │  │  ETA solver fires TASK_COMPLETED event                  │
 │        │   │  ▼                                                         │
-│        │   │  ┌────────────────────────────────────────────────────┐   │
-│        │   │  │            TASK_COMPLETED handler                   │   │
-│        │   │  │                                                     │   │
-│        │   │  │  on_time?  YES → +reward_funds  +prestige_delta    │   │
-│        │   │  │                  +skill_boost   +salary_bump       │   │
-│        │   │  │            NO  → -1.4× prestige_delta (penalty)    │   │
-│        └───┘  └─────────────────────┬───────────────────────────── ┘   │
+│        │   │  ┌────────────────────────────────────────────────────┐    │
+│        │   │  │            TASK_COMPLETED handler                  │    │
+│        │   │  │                                                    │    │
+│        │   │  │  on_time?  YES → +reward_funds  +prestige_delta    │    │
+│        │   │  │                  +skill_boost   +salary_bump       │    │
+│        │   │  │            NO  → -1.4× prestige_delta (penalty)    │    │
+│        └───┘  └─────────────────────┬───────────────────────────── ┘    │
 │                                     │                                   │
 │  ┌──────────────────────────────────┘                                   │
 │  │  Monthly payroll (1st biz day)    Bankruptcy check (funds < 0)       │
