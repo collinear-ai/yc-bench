@@ -1,14 +1,16 @@
-# YC-Bench
+# <img src="imgs/yc_bench.png" alt="YC-Bench logo" width="40" /> YC-Bench
 
 A long-horizon deterministic benchmark for LLM agents. The agent plays CEO of an AI startup over a simulated 1–3 year run, operating exclusively through a CLI tool against a SQLite-backed discrete-event simulation.
 
-The benchmark tests whether agents can manage compounding decisions: prestige specialisation, employee allocation, cash flow, and deadline risk — sustained over hundreds of turns.
+The benchmark tests whether agents can manage compounding decisions: prestige specialisation, employee allocation, cash flow, and deadline risk - sustained over hundreds of turns.
 
 ---
 
 ## Simulation Dynamics
 
-```
+![YC Bench Architecture](imgs/arch.png "Architecture YC-Bench")
+
+<!-- ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          AGENT (LLM)                                    │
 │                                                                         │
@@ -44,7 +46,7 @@ The benchmark tests whether agents can manage compounding decisions: prestige sp
 │  │  Monthly payroll (1st biz day)    Bankruptcy check (funds < 0)       │
 │  │  Horizon end (1–3 years)          Context truncation (last 20 rounds)│
 └──┴──────────────────────────────────────────────────────────────────────┘
-```
+``` -->
 
 ### Core loop
 
