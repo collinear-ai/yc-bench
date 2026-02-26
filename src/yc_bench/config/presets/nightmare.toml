@@ -1,0 +1,96 @@
+# nightmare — Can the agent sustain perfect play for an entire year?
+#
+# Everything compounds. 8 employees burn ~$52K/month (4.8-month runway).
+# Most tasks need prestige 4–6, requiring significant climb before the
+# high-reward tiers open up. Tasks span 2–3 domains with large work
+# volumes. Deadlines are razor-thin.
+#
+# Fail penalty (2.0×) now EQUALS cancel penalty (2.5×) at the margin —
+# there's almost no good option for a task you can't finish. The only
+# winning move is to never accept what you can't complete.
+#
+# Salary bumps at 2% compound aggressively: after 20 tasks a junior
+# at $3K becomes $4,460. After 40 tasks, $6,630. By month 10 your
+# payroll has grown 30–50% from task completions alone.
+#
+# The prestige ladder is steep: mode=5 means most tasks need prestige
+# 4–6. Only ~15% of the market is accessible at prestige 1–2. The
+# agent must climb fast with the few early tasks available, then
+# leverage high-prestige rewards (0.7× scale = prestige-8 pays 5.9×
+# more than prestige-1) to outrun the compounding payroll.
+#
+# Economics (8 employees):
+#   Monthly payroll ≈ $52K.  Starting runway ≈ 4.8 months.
+#   Mode task: 2 domains × 1600 units = 3200 total.
+#   Deadline: max(7, 3200/350) = 10 business days.
+#   8 employees split 4+4: each domain 4×5.1×9=184/day → 8.7 days. Fits!
+#   But ANY second task splits rates → 4.4/day per domain → 17 days. FAIL.
+#   Must run strictly sequential: finish one task, start next.
+#   Revenue at prestige-1: ~$30K. Payroll: $52K. Net: -$22K/month.
+#   Revenue at prestige-5: $30K × 3.8 = $114K. Now profitable.
+#   The race: climb to prestige 5 before month 5 or die.
+#
+# What is tested:
+#   - Can the agent survive a 4.8-month clock to profitability?
+#   - Does it plan a prestige climb path across 2–3 domains?
+#   - Can it handle 3-domain assignments without throughput collapse?
+#   - Does it account for salary growth in long-term planning?
+#   - Can it resist every temptation to over-accept?
+
+extends = "default"
+
+name        = "nightmare"
+description = "1-year nightmare. 8 employees, steep prestige ladder, razor deadlines, aggressive salary compounding. One mistake cascades into bankruptcy."
+
+[sim]
+horizon_years = 1
+
+[loop]
+auto_advance_after_turns = 10
+
+[world]
+num_employees    = 8
+num_market_tasks = 300
+
+# Razor deadlines: 350 qty/day — need near-full team on every task.
+deadline_qty_per_day = 350.0
+
+# Catastrophic penalties — there is no good exit from a bad accept.
+penalty_fail_multiplier   = 2.0
+penalty_cancel_multiplier = 2.5
+
+# Aggressive salary compounding — payroll grows 30–50% over the year.
+salary_bump_pct = 0.02
+
+# Steep reward curve — high prestige pays dramatically more.
+# This is what makes the prestige climb existentially necessary.
+reward_prestige_scale = 0.7
+
+[world.dist.required_prestige]
+type = "triangular"
+low  = 1
+high = 10
+mode = 5        # Most tasks need prestige 4–6. Thin early market.
+
+[world.dist.domain_count]
+type = "triangular"
+low  = 1
+high = 3
+mode = 2        # Mostly 2-domain, some 3-domain.
+
+[world.dist.required_qty]
+type = "triangular"
+low  = 600
+high = 3000
+mode = 1600     # Large work volumes — no quick wins.
+
+# Larger prestige jumps on success — makes climbing feasible if you
+# never fail. But the fail penalty is so high that one blown task
+# wipes out 2 successes worth of prestige.
+[world.dist.reward_prestige_delta]
+type  = "beta"
+alpha = 1.5
+beta  = 2.5
+scale = 2.5
+low   = 0.0
+high  = 2.5

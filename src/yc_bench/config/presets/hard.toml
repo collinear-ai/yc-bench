@@ -1,0 +1,75 @@
+# hard — Can the agent compute ETAs and never overcommit?
+#
+# Tight deadlines. Heavy penalties. Every accept must be backed by
+# arithmetic: "do I have the employee-hours to finish this before
+# the deadline, WITHOUT degrading my in-flight tasks?"
+#
+# Accepting a task you can't finish is now catastrophic: fail penalty
+# (1.4×) costs real prestige, and cancel penalty (2.0×) is worse.
+# Speculative accepting is suicide. The agent must either compute
+# ETAs explicitly or learn to stay conservative.
+#
+# Salary bumps compound: after 15 completed tasks, a junior at $3K/mo
+# becomes $3,480/mo. After 30 tasks, $4,040/mo. Payroll creeps up
+# by ~$5K/month over the year.
+#
+# Economics (7 employees):
+#   Monthly payroll ≈ $46K.  Starting runway ≈ 5.4 months.
+#   Mode task: 2 domains × 1200 units = 2400 total.
+#   Deadline: max(7, 2400/280) = 9 business days.
+#   7 employees split 4+3: domain1 4×5.1×9=184/day → 6.5 days.
+#                           domain2 3×5.1×9=138/day → 8.7 days. Just fits!
+#   But dispatching a SECOND task splits all employees: rates halve,
+#   both tasks miss. Must finish one before starting another.
+#
+# What is tested:
+#   - Can the agent estimate completion time vs. deadline?
+#   - Does it understand that a new dispatch degrades existing tasks?
+#   - Can it manage cash flow with 5.4-month runway?
+#   - Does it resist accepting "tempting" high-reward tasks it can't finish?
+
+extends = "default"
+
+name        = "hard"
+description = "1-year hard. Tight deadlines, heavy penalties, 7 employees. Tests precise capacity planning."
+
+[sim]
+horizon_years = 1
+
+[loop]
+auto_advance_after_turns = 10
+
+[world]
+num_employees    = 7
+num_market_tasks = 200
+
+# Tight deadlines: 280 qty/day — need most of the team focused.
+deadline_qty_per_day = 280.0
+
+# Stiff penalties — mistakes cost real prestige.
+penalty_fail_multiplier   = 1.4
+penalty_cancel_multiplier = 2.0
+
+# Salary compounding is noticeable.
+salary_bump_pct = 0.01
+
+# High-prestige tasks pay substantially more.
+reward_prestige_scale = 0.55
+
+[world.dist.required_prestige]
+type = "triangular"
+low  = 1
+high = 8
+mode = 4        # Most tasks need prestige 3–5.
+
+[world.dist.domain_count]
+type = "triangular"
+low  = 1
+high = 3
+mode = 2        # Most tasks need 2 domains.
+
+[world.dist.required_qty]
+type = "triangular"
+low  = 500
+high = 2500
+mode = 1200     # Large tasks — require sustained focus.

@@ -1,0 +1,61 @@
+# easy — Can the agent avoid throughput dilution?
+#
+# Tasks are still accessible (prestige-1 dominated), but now there are
+# more employees and moderate deadlines. An agent that accepts 5 tasks
+# at once will split every employee's rate by 5 and miss all deadlines.
+# An agent that stays focused on 1–2 tasks will breeze through.
+#
+# Economics (5 employees, seed-dependent):
+#   Monthly payroll ≈ $32K.  Starting runway ≈ 7.8 months.
+#   Mode task: 1 domain × 700 units.  Deadline: max(7, 700/150) = 7 days.
+#   Team throughput on 1 task: 5 × ~5.1 avg × 9h = 230 units/day → 3 days.
+#   On 4 parallel tasks: each employee at rate/4 → 57 units/day → 12 days > 7. FAIL.
+#
+# What is tested:
+#   - Does the agent understand that parallel tasks dilute employee throughput?
+#   - Does it keep ≤2 tasks active at a time?
+#   - Can it sequence tasks rather than batch?
+
+extends = "default"
+
+name        = "easy"
+description = "1-year easy. 5 employees, single-domain tasks. Tests throughput awareness — parallelism kills."
+
+[sim]
+horizon_years = 1
+
+[loop]
+auto_advance_after_turns = 8
+
+[world]
+num_employees    = 5
+num_market_tasks = 100
+
+# Moderate deadlines: 150 qty/day — manageable with focus, fatal with spread.
+deadline_qty_per_day = 150.0
+
+# Original (un-hardened) penalties — costly but not catastrophic.
+penalty_fail_multiplier   = 0.8
+penalty_cancel_multiplier = 1.2
+
+# Mild salary bump — compounding barely noticeable in 1 year.
+salary_bump_pct = 0.005
+
+# Low reward scaling — prestige climbing not yet necessary.
+reward_prestige_scale = 0.3
+
+[world.dist.required_prestige]
+type = "triangular"
+low  = 1
+high = 4
+mode = 1        # Almost all tasks accessible at prestige-1.
+
+[world.dist.domain_count]
+type = "constant"
+value = 1        # Single-domain — the test is about throughput, not assignment.
+
+[world.dist.required_qty]
+type = "triangular"
+low  = 300
+high = 1500
+mode = 700       # Moderate size — a few days of focused work each.

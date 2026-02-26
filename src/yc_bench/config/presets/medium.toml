@@ -1,0 +1,71 @@
+# medium — Can the agent climb the prestige ladder?
+#
+# Now prestige matters. Most tasks need prestige 2–4. At startup, only
+# ~30% of the market is accessible (prestige-1 tasks). The agent must
+# complete low-prestige tasks to build domain prestige, then graduate
+# to higher-reward tiers. Random domain climbing wastes time — the
+# agent should focus on 2–3 domains.
+#
+# Two-domain tasks appear for the first time. Employee assignment
+# becomes a cross-domain puzzle: you need good employees in BOTH
+# domains to finish on time.
+#
+# Economics (5 employees):
+#   Monthly payroll ≈ $32K.  Starting runway ≈ 7.8 months.
+#   Mode task: 2 domains × 900 units = 1800 total.
+#   Deadline: max(7, 1800/200) = 9 business days.
+#   Focused team: 3 on domain1 (3×5.1×9=138/day → 6.5 days)
+#                 2 on domain2 (2×5.1×9=92/day → 9.8 days). Tight!
+#   Prestige-1 reward: ~$30K. Prestige-4 reward: $30K × 2.35 = $70K.
+#   Climbing prestige doubles income per task.
+#
+# What is tested:
+#   - Does the agent understand prestige gates market access?
+#   - Does it specialise in a few domains rather than spreading thin?
+#   - Can it handle 2-domain task assignments?
+
+extends = "default"
+
+name        = "medium"
+description = "1-year medium. Prestige ladder active, 2-domain tasks. Tests strategic domain specialisation."
+
+[sim]
+horizon_years = 1
+
+[loop]
+auto_advance_after_turns = 8
+
+[world]
+num_employees    = 5
+num_market_tasks = 150
+
+# Standard deadline pace — manageable with good allocation.
+deadline_qty_per_day = 200.0
+
+# Real penalties — failing costs prestige, cancelling costs more.
+penalty_fail_multiplier   = 1.0
+penalty_cancel_multiplier = 1.5
+
+# Moderate salary bump — starts to matter by month 10.
+salary_bump_pct = 0.01
+
+# Prestige scaling starting to reward climbing.
+reward_prestige_scale = 0.45
+
+[world.dist.required_prestige]
+type = "triangular"
+low  = 1
+high = 7
+mode = 3        # Most tasks need prestige 2–4. Thin early market.
+
+[world.dist.domain_count]
+type = "triangular"
+low  = 1
+high = 3
+mode = 2        # Most tasks need 2 domains.
+
+[world.dist.required_qty]
+type = "triangular"
+low  = 400
+high = 2000
+mode = 900      # Moderate work — completable in 7–12 days with focus.

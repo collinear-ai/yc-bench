@@ -1,0 +1,59 @@
+# tutorial — Can the agent execute accept → assign → dispatch → resume?
+#
+# Everything is forgiving. Single-domain tasks, generous deadlines,
+# negligible penalties. An agent that discovers the 4-step loop will
+# survive. One that doesn't will bleed payroll and die.
+#
+# Economics (3 employees, seed-dependent):
+#   Monthly payroll ≈ $15K.  Starting runway ≈ 16 months (> 1yr horizon).
+#   Mode task: 1 domain × 400 units.  Deadline: max(7, 400/100) = 7 days.
+#   A single mid-tier employee (rate ~6/hr × 9h = 54 units/day) finishes
+#   in 7.4 days — just within the 7-day deadline.  Two employees → 3.7 days.
+#   Revenue per task: ~$30K (mode).  1 task/month covers payroll.
+#
+# What is tested:
+#   - Does the agent discover and execute the CLI loop?
+#   - Does it call sim resume to advance time?
+#   - Can it read JSON output and act on it?
+
+extends = "default"
+
+name        = "tutorial"
+description = "1-year tutorial. 3 employees, single-domain tasks, forgiving deadlines. Tests basic loop execution."
+
+[sim]
+horizon_years = 1
+
+[loop]
+auto_advance_after_turns = 5
+
+[world]
+num_employees    = 3
+num_market_tasks = 50
+
+# Very generous deadlines: 100 qty/day → most tasks get 7-day minimum.
+deadline_qty_per_day = 100.0
+
+# Negligible penalties — mistakes barely hurt.
+penalty_fail_multiplier   = 0.3
+penalty_cancel_multiplier = 0.5
+
+# No salary compounding — payroll stays flat.
+salary_bump_pct = 0.0
+
+# Mild reward scaling — no need to climb prestige.
+reward_prestige_scale = 0.2
+
+[world.dist.required_prestige]
+type = "constant"
+value = 1        # ALL tasks are prestige-1 — no gating at all.
+
+[world.dist.domain_count]
+type = "constant"
+value = 1        # ALL tasks single-domain — trivial assignment.
+
+[world.dist.required_qty]
+type = "triangular"
+low  = 200
+high = 800
+mode = 400       # Small tasks, quick completions.
