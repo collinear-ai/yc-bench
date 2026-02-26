@@ -325,41 +325,45 @@ The hardened default is designed so that the obvious strategies fail:
 
 ## Benchmark results
 
-### Sonnet 4.6 vs Gemini 3 Flash — 1-year horizon, 3 seeds per config
+### Sonnet 4.6 vs Gemini 3 Flash vs GPT-5.2 — 1-year horizon, 3 seeds per config
 
-![Sonnet vs Gemini comparison](plots/sonnet_vs_gemini.png)
+![3-model comparison](plots/sonnet_vs_gemini.png)
 
-#### Survival rates
+#### Survival rates (at end of year 1)
 
-| Config | Sonnet 4.6 | Gemini 3 Flash |
-|--------|-----------|----------------|
-| **medium** | 2/3 survived | 3/3 survived |
-| **hard** | 0/3 survived | 1/3 survived |
-| **nightmare** | 1/3 survived | 1/3 survived |
+| Config | Sonnet 4.6 | Gemini 3 Flash | GPT-5.2 |
+|--------|-----------|----------------|---------|
+| **medium** | 3/3 survived | 3/3 survived | 3/3 survived |
+| **hard** | 1/3 survived | 2/3 survived | 2/3 survived |
+| **nightmare** | 1/3 survived | 3/3 survived | 2/3 survived |
 
-#### Task efficiency (wins / fails / win rate / final funds at 1 year)
+#### Final funds at 1-year mark (bankrupt = funds < 0)
 
-| Config | Seed | Sonnet 4.6 | Gemini 3 Flash |
-|--------|------|-----------|----------------|
-| medium | 1 | 90W / 18F (83%) · **$9.1M** | 199W / 14F (93%) · **$9.5M** |
-| medium | 2 | 63W / 64F (49%) · **$6.1M** | 204W / 10F (95%) · **$11M** |
-| medium | 3 | 6W / 9F (40%) · bankrupt | 229W / 3F (98%) · **$15.8M** |
-| hard | 1 | 1W / 16F (5%) · bankrupt | 3W / 6F (33%) · bankrupt |
-| hard | 2 | 7W / 20F (25%) · bankrupt | 9W / 3F (75%) · bankrupt |
-| hard | 3 | 2W / 10F (16%) · bankrupt | 219W / 12F (94%) · **$21.9M** |
-| nightmare | 1 | 1W / 9F (10%) · bankrupt | 16W / 11F (59%) · **$478K** |
-| nightmare | 2 | 50W / 35F (58%) · **$10.1M** | 6W / 3F (66%) · bankrupt |
-| nightmare | 3 | 4W / 24F (14%) · bankrupt | 8W / 6F (57%) · bankrupt |
+| Config | Seed | Sonnet 4.6 | Gemini 3 Flash | GPT-5.2 |
+|--------|------|-----------|----------------|---------|
+| medium | 1 | **$9.1M** | **$9.5M** | **$1.8M** |
+| medium | 2 | **$6.1M** | **$11.0M** | **$321K** |
+| medium | 3 | **$107K** | **$15.8M** | **$28K** |
+| hard | 1 | bankrupt | bankrupt | bankrupt |
+| hard | 2 | **$63K** | **$412K** | **$15.7M** |
+| hard | 3 | bankrupt | **$21.9M** | **$43.5M** |
+| nightmare | 1 | bankrupt | **$2.1M** | bankrupt |
+| nightmare | 2 | **$10.1M** | **$214K** | **$2.2M** |
+| nightmare | 3 | bankrupt | **$805K** | **$23.6M** |
+
+**Overall: Gemini 8/9 · GPT-5.2 7/9 · Sonnet 5/9**
 
 ### Key findings
 
-**Gemini wins on consistency.** 5/9 survivals vs Sonnet's 3/9. Gemini's win rate is dramatically higher — 93–98% on medium vs Sonnet's 40–83%. Gemini never uses the scratchpad. It plays fast and reactive.
+**Gemini leads on consistency (8/9).** Near-perfect win rates on medium (93–98%), and the only model to sweep all 3 nightmare seeds. Achieves this without using the scratchpad — purely reactive, high-frequency decision-making.
 
-**Sonnet wins on ceiling.** When Sonnet survives nightmare (seed 2, $10.1M), it dramatically outperforms Gemini's nightmare survivor ($478K). Sonnet's scratchpad reveals it explicitly learned "Max 2 tasks active at once" after 4 consecutive failures — then rebuilt methodically to prestige 10 in two domains.
+**GPT-5.2 excels at hard (2/3, matching Gemini) with the highest absolute returns.** Hard seed 3: $43.5M vs Gemini's $21.9M. Nightmare seed 3: $23.6M vs Gemini's $805K. When GPT-5.2 survives, it tends to outperform by a significant margin.
 
-**Hard is the differentiator.** Both models struggle (0/3 and 1/3). Tight deadlines and the prestige-4 gate create a narrow viable path. On seed 3, Gemini found it (219 wins, $21.9M) while Sonnet went 2W/10F and died.
+**Sonnet has the highest ceiling when it works but the lowest floor.** Nightmare seed 2: $10.1M (best nightmare result). But 4/9 bankruptcies — Sonnet fails harder than the others on adverse seeds.
 
-**Win rate predicts survival.** Every run with >58% win rate survived. Every run with <40% went bankrupt. The threshold appears to be around 50% — below that, prestige losses from failures outpace gains, locking the agent out of profitable tasks.
+**Hard is the differentiator config.** On easy configs all three survive. On hard/nightmare the strategies diverge sharply. Gemini plays safe and consistent; GPT-5.2 swings big; Sonnet is high-variance.
+
+**Win rate predicts survival.** Every run with >58% task win rate survived. Every run with <40% went bankrupt. Below that threshold, prestige losses from failures outpace gains and lock the agent out of profitable tasks.
 
 ### Why models fail
 

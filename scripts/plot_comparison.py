@@ -1,4 +1,4 @@
-"""Sonnet 4.6 vs Gemini 3 Flash — apples-to-apples comparison plot."""
+"""Sonnet 4.6 vs Gemini 3 Flash vs GPT-5.2 — apples-to-apples comparison plot."""
 import sqlite3
 from pathlib import Path
 from datetime import datetime
@@ -17,13 +17,16 @@ MODELS = {
         "slug": "anthropic_claude-sonnet-4-6",
         "label": "Sonnet 4.6",
         "color": "#2563eb",
-        "dash": "-",
     },
     "gemini": {
         "slug": "gemini_gemini-3-flash-preview",
         "label": "Gemini 3 Flash",
         "color": "#f97316",
-        "dash": "-",
+    },
+    "gpt52": {
+        "slug": "openai_gpt-5.2",
+        "label": "GPT-5.2",
+        "color": "#16a34a",
     },
 }
 
@@ -89,7 +92,7 @@ def load_all():
 def make_plot(runs):
     fig, axes = plt.subplots(3, 3, figsize=(18, 14), facecolor="white")
     fig.suptitle(
-        "Sonnet 4.6  vs  Gemini 3 Flash  ·  YC-Bench  ·  1-Year Horizon",
+        "Sonnet 4.6  vs  Gemini 3 Flash  vs  GPT-5.2  ·  YC-Bench  ·  1-Year Horizon",
         fontsize=16, fontweight="600", y=0.98, color="#1a1a1a",
     )
 
