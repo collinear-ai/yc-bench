@@ -1,0 +1,14 @@
+{
+  "session_id": "run-3-gemini/gemini-3-flash-preview",
+  "model": "gemini/gemini-3-flash-preview",
+  "seed": 3,
+  "horizon_years": 3,
+  "turns_completed": 0,
+  "terminal": true,
+  "terminal_reason": "error",
+  "terminal_detail": "Failed to run turn after 3 attempts",
+  "total_cost_usd": 0.0,
+  "started_at": "2026-02-26T07:16:20.259365+00:00",
+  "ended_at": "2026-02-26T07:16:23.662154+00:00",
+  "transcript": []
+}

@@ -29,10 +29,9 @@ backend/yc_bench_log_*.txt
 
 agent.md
 
-# Benchmark runtime outputs — not committed
+# Benchmark runtime outputs
 db/
 logs/
-results/
 
 # Claude session context — local only
 CLAUDE.md

@@ -4,6 +4,7 @@ import json
 import sys
 from contextlib import contextmanager
 from decimal import Decimal
+from typing import Optional
 from uuid import UUID
 
 import typer
@@ -80,7 +81,7 @@ app.add_typer(scratchpad_app, name="scratchpad")
 def run_command_cli(
     model: str = typer.Option(..., help="LiteLLM model string (e.g. openrouter/z-ai/glm-5)"),
     seed: int = typer.Option(..., help="Random seed for deterministic world generation"),
-    horizon_years: int = typer.Option(3, help="Simulation horizon in years"),
+    horizon_years: Optional[int] = typer.Option(None, help="Simulation horizon in years (default from config)"),
     company_name: str = typer.Option("BenchCo", help="Name of the simulated company"),
     start_date: str = typer.Option("2025-01-01", help="Simulation start date (YYYY-MM-DD)"),
     config_name: str = typer.Option(

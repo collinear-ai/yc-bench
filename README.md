@@ -192,30 +192,30 @@ cd YC_Bench
 uv sync
 ```
 
-No database setup required — the runner auto-creates `db/<seed>_<model>.db` on first run.
+No database setup required — the runner auto-creates `db/<config>_<seed>_<model>.db` on first run.
 
 ### API key
 
 ```bash
 # .env  (any LiteLLM-compatible provider)
-OPENROUTER_API_KEY="sk-or-v1-..."
-# or
-OPENAI_API_KEY="sk-..."
-# or set OPENAI_BASE_URL for a custom OpenAI-compatible endpoint
+ANTHROPIC_API_KEY="sk-ant-..."     # for anthropic/claude-*
+GEMINI_API_KEY="AIza..."           # for gemini/gemini-*
+OPENROUTER_API_KEY="sk-or-v1-..."  # for openrouter/*
+OPENAI_API_KEY="sk-..."            # for openai/*
 ```
 
 ### Run a single model
 
 ```bash
 uv run yc-bench run \
-  --model openrouter/google/gemini-2.5-flash-preview \
+  --model gemini/gemini-3-flash-preview \
   --seed 1 \
-  --config challenge
+  --config medium
 ```
 
 Outputs:
-- `db/1_openrouter_google_gemini-2.5-flash-preview.db` — SQLite simulation state
-- `results/yc_bench_result_1_openrouter_google_gemini-2.5-flash-preview.json` — full rollout + transcript
+- `db/medium_1_gemini_gemini-3-flash-preview.db` — SQLite simulation state
+- `results/yc_bench_result_medium_1_gemini_gemini-3-flash-preview.json` — full rollout + transcript
 
 ### Run 5 models in parallel
 
@@ -238,15 +238,25 @@ Experiment presets live in `src/yc_bench/config/presets/` as TOML files. Pass th
 
 ```
 src/yc_bench/config/presets/
-├── default.toml      # 3yr, 10 employees, 500 tasks — hardened (deadline_qty=320)
-├── challenge.toml    # 3yr, 10 employees, 300 tasks — calibrated for interesting behavior
-└── fast_test.toml    # 1yr,  5 employees, 100 tasks — quick iteration (50-turn cap)
+├── default.toml      # 3yr, 10 employees, 500 tasks — base config
+├── tutorial.toml     # 1yr,  3 employees,  50 tasks — learn the loop
+├── easy.toml         # 1yr,  5 employees, 100 tasks — throughput awareness
+├── medium.toml       # 1yr,  5 employees, 150 tasks — prestige strategy
+├── hard.toml         # 1yr,  7 employees, 200 tasks — precise ETA reasoning
+├── nightmare.toml    # 1yr,  8 employees, 300 tasks — sustained perfection
+├── challenge.toml    # 3yr,  5 employees, 200 tasks — long-horizon endurance
+└── fast_test.toml    # 1yr,  5 employees, 100 tasks — quick iteration
 ```
 
-The **`challenge`** preset is the recommended config for inter-model comparison. It is calibrated so that:
-- A focused agent (≤4 simultaneous tasks) consistently beats deadlines and grows prestige.
-- A spread agent (5+ tasks in parallel, diluted throughput) misses deadlines, loses prestige, goes bankrupt.
-- The best models reach the 3-year horizon; the worst die in month 3.
+Each difficulty level tests one additional concept:
+
+| Config | Tests | Key constraint |
+|--------|-------|---------------|
+| **tutorial** | Basic accept→assign→dispatch loop | All prestige-1, single domain |
+| **easy** | Throughput awareness | Don't over-parallelize |
+| **medium** | Prestige climbing + domain specialization | 2-domain tasks, prestige mode=3 |
+| **hard** | Precise ETA computation | One bad accept degrades in-flight tasks |
+| **nightmare** | Sustained perfection under compounding payroll | One failure ≈ fatal, salary bumps 2%/task |
 
 ### Key WorldConfig parameters
 
@@ -315,9 +325,58 @@ The hardened default is designed so that the obvious strategies fail:
 
 ## Benchmark results
 
-![Multi-model comparison](plots/funds_curves.png)
+### Sonnet 4.6 vs Gemini 3 Flash — 1-year horizon, 3 seeds per config
 
-_Run `challenge` preset (seed=1, 3yr horizon, 10 employees, 500-turn cap) to generate updated results._
+![Sonnet vs Gemini comparison](plots/sonnet_vs_gemini.png)
+
+#### Survival rates
+
+| Config | Sonnet 4.6 | Gemini 3 Flash |
+|--------|-----------|----------------|
+| **medium** | 2/3 survived | 3/3 survived |
+| **hard** | 0/3 survived | 1/3 survived |
+| **nightmare** | 1/3 survived | 1/3 survived |
+
+#### Task efficiency (wins / fails / win rate / final funds at 1 year)
+
+| Config | Seed | Sonnet 4.6 | Gemini 3 Flash |
+|--------|------|-----------|----------------|
+| medium | 1 | 90W / 18F (83%) · **$9.1M** | 199W / 14F (93%) · **$9.5M** |
+| medium | 2 | 63W / 64F (49%) · **$6.1M** | 204W / 10F (95%) · **$11M** |
+| medium | 3 | 6W / 9F (40%) · bankrupt | 229W / 3F (98%) · **$15.8M** |
+| hard | 1 | 1W / 16F (5%) · bankrupt | 3W / 6F (33%) · bankrupt |
+| hard | 2 | 7W / 20F (25%) · bankrupt | 9W / 3F (75%) · bankrupt |
+| hard | 3 | 2W / 10F (16%) · bankrupt | 219W / 12F (94%) · **$21.9M** |
+| nightmare | 1 | 1W / 9F (10%) · bankrupt | 16W / 11F (59%) · **$478K** |
+| nightmare | 2 | 50W / 35F (58%) · **$10.1M** | 6W / 3F (66%) · bankrupt |
+| nightmare | 3 | 4W / 24F (14%) · bankrupt | 8W / 6F (57%) · bankrupt |
+
+### Key findings
+
+**Gemini wins on consistency.** 5/9 survivals vs Sonnet's 3/9. Gemini's win rate is dramatically higher — 93–98% on medium vs Sonnet's 40–83%. Gemini never uses the scratchpad. It plays fast and reactive.
+
+**Sonnet wins on ceiling.** When Sonnet survives nightmare (seed 2, $10.1M), it dramatically outperforms Gemini's nightmare survivor ($478K). Sonnet's scratchpad reveals it explicitly learned "Max 2 tasks active at once" after 4 consecutive failures — then rebuilt methodically to prestige 10 in two domains.
+
+**Hard is the differentiator.** Both models struggle (0/3 and 1/3). Tight deadlines and the prestige-4 gate create a narrow viable path. On seed 3, Gemini found it (219 wins, $21.9M) while Sonnet went 2W/10F and died.
+
+**Win rate predicts survival.** Every run with >58% win rate survived. Every run with <40% went bankrupt. The threshold appears to be around 50% — below that, prestige losses from failures outpace gains, locking the agent out of profitable tasks.
+
+### Why models fail
+
+The scratchpad evolution of Sonnet on hard seed 2 tells the full story:
+
+![Sonnet hard seed 2 scratchpad evolution](plots/notepad_hard_2_claude-sonnet-4-6.gif)
+
+Common failure patterns across all bankrupt runs:
+
+1. **Over-parallelization.** Accepting 3–5 tasks at once, splitting employees across them. Effective rate per task drops below deadline requirements. Sonnet nightmare seed 3 ran 5 tasks simultaneously with 8 employees on turn 13.
+2. **No prestige gating.** Accepting prestige-2 tasks when company prestige is 1.0. The task completes late, triggers a 1.4× prestige penalty, and the agent ends up worse than before.
+3. **Late adaptation.** Sonnet correctly identifies problems in its scratchpad ("PRESTIGE CRISIS — MARKET LOCK") but only after payroll has consumed the runway. By turn 137 of hard seed 2, all tasks require prestige ≥ 2 but the company is stuck at 1.0 in 6 of 7 domains.
+4. **Inconsistent ETA reasoning.** Sonnet's medium seed 2 has a 49% win rate — essentially a coin flip. It understands throughput math in its scratchpad but doesn't consistently apply it when selecting tasks.
+
+### Sonnet-only results by config
+
+![Sonnet results](plots/sonnet_results.png)
 
 ---
 
@@ -335,7 +394,7 @@ _Run `challenge` preset (seed=1, 3yr horizon, 10 employees, 500-turn cap) to gen
 
 ## Output format
 
-`results/yc_bench_result_<seed>_<model>.json`:
+`results/yc_bench_result_<config>_<seed>_<model>.json`:
 
 ```json
 {

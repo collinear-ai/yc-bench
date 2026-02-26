@@ -145,12 +145,12 @@ def run_benchmark(args):
     )
 
     # 1. Build engine and create all tables
-    # If DATABASE_URL is not explicitly set, default to db/<seed>_<slug>.db
+    # If DATABASE_URL is not explicitly set, default to db/<config>_<seed>_<slug>.db
     if not os.environ.get("DATABASE_URL"):
         slug = args.model.replace("/", "_")
         db_dir = Path("db")
         db_dir.mkdir(exist_ok=True)
-        os.environ["DATABASE_URL"] = f"sqlite:///{db_dir}/{args.seed}_{slug}.db"
+        os.environ["DATABASE_URL"] = f"sqlite:///{db_dir}/{args.config_name}_{args.seed}_{slug}.db"
 
     engine = build_engine()
     init_db(engine)
@@ -208,7 +208,7 @@ def run_benchmark(args):
     slug = args.model.replace("/", "_")
     results_dir = Path("results")
     results_dir.mkdir(exist_ok=True)
-    results_path = results_dir / f"yc_bench_result_{args.seed}_{slug}.json"
+    results_path = results_dir / f"yc_bench_result_{args.config_name}_{args.seed}_{slug}.json"
     results_path.write_text(json.dumps(rollout, indent=2))
     logger.info("Full rollout written to %s (%d turns)", results_path, len(rollout.get("transcript", [])))
 

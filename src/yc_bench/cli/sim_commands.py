@@ -30,7 +30,7 @@ def _parse_date(date_str: str) -> datetime:
 def sim_init(
     seed: int = typer.Option(..., help="RNG seed for deterministic generation"),
     start_date: str = typer.Option(..., "--start-date", help="Start date MM/DD/YYYY"),
-    horizon_years: int = typer.Option(3, "--horizon-years", help="Simulation horizon in years"),
+    horizon_years: int = typer.Option(1, "--horizon-years", help="Simulation horizon in years"),
     company_name: str = typer.Option(..., "--company-name", help="Company name"),
     employee_count: Optional[int] = typer.Option(None, "--employee-count", help="Number of employees (default from experiment config)"),
     market_task_count: Optional[int] = typer.Option(None, "--market-task-count", help="Number of market tasks (default from experiment config)"),

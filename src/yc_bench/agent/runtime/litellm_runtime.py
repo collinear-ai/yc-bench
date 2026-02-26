@@ -64,11 +64,12 @@ class LiteLLMRuntime(AgentRuntime):
         if self._retry_backoff_seconds <= 0:
             raise ValueError("retry_backoff_seconds must be > 0")
 
-        # API key: prefer OPENAI_API_KEY, fall back to OPENROUTER_API_KEY.
-        # For openrouter/ prefixed models LiteLLM also reads OPENROUTER_API_KEY
-        # automatically, so either approach works.
+        # API key: check provider-specific env vars, then generic fallbacks.
+        # LiteLLM reads these natively for their respective providers, but we
+        # also pass the key explicitly via kwargs to be safe.
         self._api_key = (
-            os.environ.get("OPENAI_API_KEY")
+            os.environ.get("ANTHROPIC_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
             or os.environ.get("OPENROUTER_API_KEY")
             or None
         )
@@ -159,14 +160,13 @@ class LiteLLMRuntime(AgentRuntime):
             messages=messages,
             tools=[_RUN_COMMAND_TOOL],
             tool_choice="auto",
-            temperature=self._settings.temperature,
-            top_p=self._settings.top_p,
             timeout=self._request_timeout_seconds,
         )
         if self._api_base:
             kwargs["api_base"] = self._api_base
-        if self._api_key:
-            kwargs["api_key"] = self._api_key
+        # Let LiteLLM resolve API keys from provider-specific env vars
+        # (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, etc.)
+        # rather than passing a single key that may not match the provider.
 
         response = litellm.completion(**kwargs)
 
