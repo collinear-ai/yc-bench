@@ -432,10 +432,6 @@ Common failure patterns across all bankrupt runs:
 3. **Late adaptation.** Sonnet correctly identifies problems in its scratchpad ("PRESTIGE CRISIS — MARKET LOCK") but only after payroll has consumed the runway. By turn 137 of hard seed 2, all tasks require prestige ≥ 2 but the company is stuck at 1.0 in 6 of 7 domains.
 4. **Inconsistent ETA reasoning.** Sonnet's medium seed 2 has a 49% win rate — essentially a coin flip. It understands throughput math in its scratchpad but doesn't consistently apply it when selecting tasks.
 
-### Sonnet-only results by config
-
-![Sonnet results](plots/sonnet_results.png)
-
 ---
 
 ## Simulation rules
