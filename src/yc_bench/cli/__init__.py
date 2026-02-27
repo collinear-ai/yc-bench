@@ -77,6 +77,13 @@ app.add_typer(report_app, name="report")
 app.add_typer(scratchpad_app, name="scratchpad")
 
 
+@app.command("start")
+def start_command_cli():
+    """Interactive 3-step quickstart: pick model, enter key, choose difficulty, run."""
+    from .start_command import start_interactive
+    start_interactive()
+
+
 @app.command("run")
 def run_command_cli(
     model: str = typer.Option(..., help="LiteLLM model string (e.g. openrouter/z-ai/glm-5)"),
