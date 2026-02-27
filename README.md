@@ -411,6 +411,14 @@ The hardened default is designed so that the obvious strategies fail:
 
 **Win rate predicts survival.** Every run with >58% task win rate survived. Every run with <40% went bankrupt. Below that threshold, prestige losses from failures outpace gains and lock the agent out of profitable tasks.
 
+### Prestige specialization
+
+![Prestige radar](plots/prestige_radar.png)
+
+Each radar shows final prestige across 7 domains (1 = center, 10 = edge). Large polygons = the model climbed prestige broadly. Tiny dots near center = bankrupt before gaining any prestige. Pointy shapes = domain specialization.
+
+**Greedy Bot** (navy dashed) consistently fills the full radar — it mechanically maxes prestige everywhere. Among LLMs, **Gemini** builds the most balanced prestige profiles. **GPT-5.2** shows clear specialization on medium (backend/data/frontend high, training untouched). **Sonnet** is bimodal: either maxes everything (medium seed 1) or collapses entirely (nightmare seeds 1 & 3).
+
 ### Why models fail
 
 The scratchpad evolution of Sonnet on hard seed 2 tells the full story:
