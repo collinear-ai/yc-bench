@@ -17,5 +17,7 @@ if [ ! -f "pyproject.toml" ] || ! grep -q "yc.bench" pyproject.toml 2>/dev/null;
 fi
 
 # ── Install deps & launch ───────────────────────────────────────────────
+# When piped via curl, stdin is the pipe — reattach to the terminal
+# so interactive prompts work.
 uv sync --quiet
-exec uv run yc-bench start
+exec uv run yc-bench start </dev/tty
