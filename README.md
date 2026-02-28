@@ -417,7 +417,7 @@ The hardened default is designed so that the obvious strategies fail:
 
 Each radar shows final prestige across 7 domains (1 = center, 10 = edge). Large polygons = the model climbed prestige broadly. Tiny dots near center = bankrupt before gaining any prestige. Pointy shapes = domain specialization.
 
-**Greedy Bot** (navy dashed) consistently fills the full radar — it mechanically maxes prestige everywhere. Among LLMs, **Gemini** builds the most balanced prestige profiles. **GPT-5.2** shows clear specialization on medium (backend/data/frontend high, training untouched). **Sonnet** is bimodal: either maxes everything (medium seed 1) or collapses entirely (nightmare seeds 1 & 3).
+**Human Devised Rule** (navy dashed) consistently fills the full radar — it methodically maxes prestige everywhere. Among LLMs, **Gemini** builds the most balanced prestige profiles. **GPT-5.2** shows clear specialization on medium (backend/data/frontend high, training untouched). **Sonnet** is bimodal: either maxes everything (medium seed 1) or collapses entirely (nightmare seeds 1 & 3).
 
 ### Why models fail
 
