@@ -57,7 +57,7 @@ initial_funds_cents      = 25_000_000    # $250,000
 initial_prestige_level   = 1.0
 work_hours_per_day       = 9.0
 
-num_market_tasks             = 500
+num_market_tasks             = 200
 market_browse_default_limit  = 50
 
 # Salary bump per completed task — each assigned employee gets this raise.
@@ -77,13 +77,24 @@ penalty_cancel_multiplier  = 2.0    # hardened: was 1.2
 # At 0.55: a prestige-8 task pays ~4.85x more than a prestige-1 task.
 reward_prestige_scale = 0.55    # hardened: was 0.3
 
+# Daily prestige decay per domain. Domains not exercised lose prestige
+# over time: -0.01/day → -0.3/month. Untouched domain drops ~1 level
+# every ~3 months. Prevents single-domain hyper-specialization.
+prestige_decay_per_day = 0.01
+
+# Required qty scaling by prestige: qty *= 1 + scale * (prestige - 1).
+# At 0.3: prestige-5 tasks need 2.2x the work of prestige-1 tasks.
+# High prestige pays more but demands proportionally more capacity.
+prestige_qty_scale = 0.3
+
 # --- Deadline ---
-# 320 units/day is ~60% tighter than the base 200 — need real employee-hours.
-deadline_qty_per_day   = 320.0    # hardened: was 200.0
+# Deadline = max(deadline_min_biz_days, max_domain_qty / deadline_qty_per_day).
+# Domains are worked in parallel, so deadline scales with heaviest domain, not sum.
+deadline_qty_per_day   = 150.0
 deadline_min_biz_days  = 7
 
-# --- Progress milestone ---
-task_half_threshold = 0.5
+# --- Progress milestones (checkpoint events at these completion fractions) ---
+task_progress_milestones = [0.25, 0.5, 0.75]
 
 # --- Business hours ---
 workday_start_hour = 9
@@ -132,15 +143,15 @@ low  = 500          # hardened: base default is 200
 high = 3000
 mode = 1400         # hardened: base default is 800
 
-# Prestige delta awarded per required domain on task success.
-# Left-skewed beta: most completions give small gains; occasional large jumps.
+# Prestige delta awarded per domain on task success.
+# Mean ~0.1: climbing prestige 1→5 takes ~40 tasks.
 [world.dist.reward_prestige_delta]
 type  = "beta"
 alpha = 1.2
 beta  = 2.8
-scale = 2.0
+scale = 0.35
 low   = 0.0
-high  = 2.0
+high  = 0.35
 
 # Skill rate boost applied to each assigned employee on task success.
 # Expressed as a fraction of current rate: 0.12 → average 12% boost.
@@ -161,20 +172,20 @@ share      = 0.50
 min_cents  = 200_000    # $2,000/month
 max_cents  = 400_000    # $4,000/month
 rate_min   = 1.0        # units/hour
-rate_max   = 6.5
+rate_max   = 4.0
 
 [world.salary_mid]
 name       = "mid"
 share      = 0.35
 min_cents  = 600_000    # $6,000/month
 max_cents  = 800_000    # $8,000/month
-rate_min   = 3.5
-rate_max   = 8.5
+rate_min   = 4.0
+rate_max   = 7.0
 
 [world.salary_senior]
 name       = "senior"
 share      = 0.15
 min_cents  = 1_000_000  # $10,000/month
 max_cents  = 1_500_000  # $15,000/month
-rate_min   = 5.5
+rate_min   = 7.0
 rate_max   = 10.0

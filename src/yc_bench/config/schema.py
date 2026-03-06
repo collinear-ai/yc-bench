@@ -49,9 +49,10 @@ class WorldDists(BaseModel):
     required_qty: DistSpec = Field(
         default_factory=lambda: TriangularDist(low=200, high=3000, mode=800)
     )
-    # Prestige delta awarded on task success.
+    # Prestige delta awarded per domain on task success.
+    # Mean ~0.1: climbing from prestige 1→5 takes ~40 tasks.
     reward_prestige_delta: DistSpec = Field(
-        default_factory=lambda: BetaDist(alpha=1.2, beta=2.8, scale=2.0, low=0.0, high=2.0)
+        default_factory=lambda: BetaDist(alpha=1.2, beta=2.8, scale=0.35, low=0.0, high=0.35)
     )
     # Skill rate boost fraction applied to each assigned employee on task success.
     skill_boost: DistSpec = Field(
@@ -124,12 +125,21 @@ class WorldConfig(BaseModel):
     # At 0.55: prestige-8 tasks pay ~4.85x more than prestige-1.
     reward_prestige_scale: float = 0.3
 
+    # Daily prestige decay per domain. Domains not exercised lose prestige
+    # over time: -0.01/day → -0.3/month → untouched domain drops ~1 level
+    # every ~3 months. Floored at prestige_min.
+    prestige_decay_per_day: float = 0.01
+
+    # Required qty scaling by prestige: qty *= 1 + prestige_qty_scale * (prestige - 1).
+    # At 0.3: prestige-5 tasks need 2.2× the work of prestige-1 tasks.
+    prestige_qty_scale: float = 0.3
+
     # --- Deadline computation ---
-    deadline_qty_per_day: float = 200.0  # work units assumed completable per business day
+    deadline_qty_per_day: float = 150.0  # max per-domain qty / this = deadline days
     deadline_min_biz_days: int = 7
 
-    # --- Progress milestone ---
-    task_half_threshold: float = 0.5
+    # --- Progress milestones (fraction thresholds that trigger checkpoint events) ---
+    task_progress_milestones: list[float] = Field(default_factory=lambda: [0.25, 0.5, 0.75])
 
     # --- Business hours ---
     workday_start_hour: int = 9
@@ -143,21 +153,21 @@ class WorldConfig(BaseModel):
         default_factory=lambda: SalaryTierConfig(
             name="junior", share=0.50,
             min_cents=200_000, max_cents=400_000,
-            rate_min=1.0, rate_max=6.5,
+            rate_min=1.0, rate_max=4.0,
         )
     )
     salary_mid: SalaryTierConfig = Field(
         default_factory=lambda: SalaryTierConfig(
             name="mid", share=0.35,
             min_cents=600_000, max_cents=800_000,
-            rate_min=3.5, rate_max=8.5,
+            rate_min=4.0, rate_max=7.0,
         )
     )
     salary_senior: SalaryTierConfig = Field(
         default_factory=lambda: SalaryTierConfig(
             name="senior", share=0.15,
             min_cents=1_000_000, max_cents=1_500_000,
-            rate_min=5.5, rate_max=10.0,
+            rate_min=7.0, rate_max=10.0,
         )
     )
 

@@ -18,13 +18,10 @@ SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
 # Domain → (display name, color) for styled inline display
 DOMAIN_STYLE = {
-    "system":   ("System",   "bright_cyan"),
-    "research": ("Research", "bright_magenta"),
-    "data":     ("Data",     "bright_blue"),
-    "frontend": ("Frontend", "bright_yellow"),
-    "backend":  ("Backend",  "bright_green"),
-    "training": ("Training", "red"),
-    "hardware": ("Hardware", "white"),
+    "research":         ("Research",  "bright_magenta"),
+    "inference":        ("Inference", "bright_cyan"),
+    "data_environment": ("Data/Env",  "bright_blue"),
+    "training":         ("Training",  "red"),
 }
 
 
@@ -401,7 +398,7 @@ class BenchmarkDashboard:
                 prog_parts.append(f"{tag} {bar}")
             progress_str = " ".join(prog_parts)
 
-            table.add_row(marker, t.title[:20], reward, t.deadline, progress_str)
+            table.add_row(marker, t.title, reward, t.deadline, progress_str)
 
         remaining = len(s.tasks_detail) - 6
         if remaining > 0:

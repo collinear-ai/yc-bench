@@ -28,11 +28,10 @@ horizon_years = 1
 auto_advance_after_turns = 8
 
 [world]
-num_employees    = 5
-num_market_tasks = 100
+# Inherits num_employees=10, num_market_tasks=200 from default.
 
-# Moderate deadlines: 150 qty/day — manageable with focus, fatal with spread.
-deadline_qty_per_day = 150.0
+# Moderate deadlines: 60 qty/day → ~12 day deadline. Comfortable with 3–4 tasks.
+deadline_qty_per_day = 60.0
 
 # Original (un-hardened) penalties — costly but not catastrophic.
 penalty_fail_multiplier   = 0.8

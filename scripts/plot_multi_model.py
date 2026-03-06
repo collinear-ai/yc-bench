@@ -1,7 +1,7 @@
 """Multi-model comparison plot: funds curves + cost vs budget.
 
 Run from the repo root:
-    uv run python scripts/plot_multi_model.py [--seed 1] [--config challenge] [--budget 30]
+    uv run python scripts/plot_multi_model.py [--seed 1] [--config hard] [--budget 30]
 """
 import argparse
 import json
@@ -32,7 +32,7 @@ INITIAL_FUNDS_CENTS = 25_000_000  # $250K
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--config", default="challenge")
+    p.add_argument("--config", default="hard")
     p.add_argument("--budget", type=float, default=30.0)
     p.add_argument("--out", default=None, help="Output PNG path (default: plots/funds_curves.png)")
     return p.parse_args()

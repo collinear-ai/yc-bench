@@ -69,12 +69,11 @@ def detect_key(api_key: str) -> tuple[str, str]:
 # ── Config presets ───────────────────────────────────────────────────────
 
 PRESETS = [
-    ("tutorial",  "Tutorial",   "1 yr", "3 emp",  "50 tasks",  "Learn the basics"),
-    ("easy",      "Easy",       "1 yr", "5 emp",  "100 tasks", "Gentle intro"),
-    ("medium",    "Medium",     "1 yr", "5 emp",  "150 tasks", "Prestige + specialization"),
-    ("hard",      "Hard",       "1 yr", "7 emp",  "200 tasks", "Deadline pressure"),
-    ("challenge", "Challenge",  "3 yr", "5 emp",  "200 tasks", "Long-horizon endurance"),
-    ("nightmare", "Nightmare",  "1 yr", "8 emp",  "300 tasks", "Sustained perfection"),
+    ("tutorial",  "Tutorial",   "1 yr", "10 emp", "200 tasks", "Learn the basics"),
+    ("easy",      "Easy",       "1 yr", "10 emp", "200 tasks", "Gentle intro"),
+    ("medium",    "Medium",     "1 yr", "10 emp", "200 tasks", "Prestige + specialization"),
+    ("hard",      "Hard",       "1 yr", "10 emp", "200 tasks", "Deadline pressure"),
+    ("nightmare", "Nightmare",  "1 yr", "10 emp", "200 tasks", "Sustained perfection"),
 ]
 
 

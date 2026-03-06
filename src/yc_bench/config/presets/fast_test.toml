@@ -19,10 +19,7 @@ auto_advance_after_turns = 5
 max_turns                = 50
 
 [world]
-num_employees    = 5
-num_market_tasks = 100
+# Inherits num_employees=10, num_market_tasks=200 from default.
 
-# With 5 employees (~220 units/day team throughput), the hardened default of
-# 320 is physically impossible for most tasks. 200 restores parity so a
-# focused agent can actually win tasks on time.
-deadline_qty_per_day = 200
+# Deadline based on max per-domain qty (parallel domain work).
+deadline_qty_per_day = 150

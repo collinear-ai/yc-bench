@@ -50,8 +50,8 @@ CONFIGS = ["medium", "hard", "nightmare"]
 SEEDS = [1, 2, 3]
 DIFF_COLORS = {"medium": BLUE, "hard": ORANGE, "nightmare": "#DC2626"}
 
-DOMAINS = ["system", "research", "data", "frontend", "backend", "training", "hardware"]
-DOMAIN_LABELS = ["SYS", "RES", "DATA", "FE", "BE", "TRAIN", "HW"]
+DOMAINS = ["research", "inference", "data_environment", "training"]
+DOMAIN_LABELS = ["RES", "INF", "DATA/ENV", "TRAIN"]
 
 
 def load_logo_image(height_px=80):

@@ -9,7 +9,7 @@ from uuid import UUID
 
 import typer
 
-from ..db.session import build_engine, build_session_factory, session_scope
+from ..db.session import build_engine, build_session_factory, init_db, session_scope
 
 app = typer.Typer(name="yc-bench", add_completion=False)
 
@@ -22,6 +22,7 @@ app = typer.Typer(name="yc-bench", add_completion=False)
 def get_db():
     """Yield a transactional SQLAlchemy session, commit on success."""
     engine = build_engine()
+    init_db(engine)
     factory = build_session_factory(engine)
     with session_scope(factory) as session:
         yield session

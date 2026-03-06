@@ -19,11 +19,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ..db.models.company import Company
+from ..db.models.company import Company, CompanyPrestige
 from ..db.models.employee import Employee
 from ..db.models.event import EventType, SimEvent
 from ..db.models.ledger import LedgerCategory, LedgerEntry
 from ..db.models.sim_state import SimState
+from ..config import get_world_config
 from .business_time import iter_monthly_payroll_boundaries
 from .eta import recalculate_etas
 from .events import consume_event, fetch_next_event, insert_event
@@ -74,13 +75,16 @@ def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id:
     """Route event to appropriate handler. Returns result dict."""
     if event.event_type == EventType.TASK_HALF_PROGRESS:
         result = handle_task_half(db, event)
-        return {"type": "task_half", "task_id": str(result.task_id), "handled": result.handled}
+        # Recalculate ETAs so the next milestone is scheduled
+        from ..config import get_world_config
+        recalculate_etas(db, company_id, sim_time, milestones=get_world_config().task_progress_milestones)
+        return {"type": "task_half", "task_id": str(result.task_id), "milestone_pct": result.milestone_pct, "handled": result.handled}
 
     elif event.event_type == EventType.TASK_COMPLETED:
         result = handle_task_complete(db, event, sim_time)
         # Recalculate ETAs — freed employees change topology
         from ..config import get_world_config
-        recalculate_etas(db, company_id, sim_time, half_threshold=get_world_config().task_half_threshold)
+        recalculate_etas(db, company_id, sim_time, milestones=get_world_config().task_progress_milestones)
         return {
             "type": "task_completed",
             "task_id": str(result.task_id),
@@ -98,6 +102,19 @@ def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id:
         return {"type": "bankruptcy", "bankrupt": result.bankrupt}
 
     return {"type": "unknown", "event_type": event.event_type.value}
+
+
+def apply_prestige_decay(db: Session, company_id: UUID, days_elapsed: float) -> None:
+    """Reduce prestige in all domains by decay_rate × days. Floors at prestige_min."""
+    wc = get_world_config()
+    if wc.prestige_decay_per_day <= 0 or days_elapsed <= 0:
+        return
+    decay = Decimal(str(wc.prestige_decay_per_day * days_elapsed))
+    floor = Decimal(str(wc.prestige_min))
+    rows = db.query(CompanyPrestige).filter(CompanyPrestige.company_id == company_id).all()
+    for row in rows:
+        row.prestige_level = max(floor, row.prestige_level - decay)
+    db.flush()
 
 
 def advance_time(
@@ -145,9 +162,11 @@ def advance_time(
 
         action_type, action_time = candidates[0]
 
-        # Flush progress from current_time to action_time
+        # Flush progress and apply prestige decay from current_time to action_time
         if action_time > current_time:
+            days_elapsed = (action_time - current_time).total_seconds() / 86400.0
             flush_progress(db, company_id, current_time, action_time)
+            apply_prestige_decay(db, company_id, days_elapsed)
             current_time = action_time
 
         if action_type == "target":

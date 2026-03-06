@@ -8,13 +8,11 @@ from ..config.sampling import sample_from_spec
 from ..config.schema import WorldConfig
 from ..db.models.company import Domain
 from .rng import RngStreams, sample_without_replacement
-from .task_catalog import pick_task_text
 
 
 @dataclass(frozen=True)
 class GeneratedTask:
     title: str
-    description: str
     required_prestige: int
     reward_funds_cents: int
     reward_prestige_delta: float
@@ -25,7 +23,7 @@ class GeneratedTask:
     deadline: datetime | None
     completed_at: datetime | None
     success: bool | None
-    halfway_event_emitted: bool
+    progress_milestone_pct: int
     requirements: dict[str, int]
 
 
@@ -65,24 +63,16 @@ def _sample_required_qty(rng, cfg):
     return int(sample_from_spec(rng, cfg.dist.required_qty))
 
 
-def _sample_requirements(rng, cfg):
+def _sample_requirements(rng, cfg, prestige=1):
     k = _sample_domain_count(rng, cfg)
     picked_domains = sample_without_replacement(rng, _ALL_DOMAINS, k)
-    return {domain: _sample_required_qty(rng, cfg) for domain in picked_domains}
-
-
-def _pick_title_desc(rng, primary_domain, serial):
-    title, description = pick_task_text(rng, primary_domain)
-    domain_str = primary_domain.value if hasattr(primary_domain, "value") else str(primary_domain)
-    title = f"{title} [{domain_str.upper()}-{serial}]"
-    return title, description
+    scale = 1 + cfg.prestige_qty_scale * (prestige - 1)
+    return {domain: int(_sample_required_qty(rng, cfg) * scale) for domain in picked_domains}
 
 
 def _make_task(rng, cfg, prestige, serial, requirements):
-    title, description = _pick_title_desc(rng, next(iter(requirements)), serial)
     return GeneratedTask(
-        title=title,
-        description=description,
+        title=f"Task-{serial}",
         required_prestige=prestige,
         reward_funds_cents=_sample_reward_funds_cents(rng, cfg, prestige=prestige),
         reward_prestige_delta=_sample_reward_prestige_delta(rng, cfg),
@@ -93,7 +83,7 @@ def _make_task(rng, cfg, prestige, serial, requirements):
         deadline=None,
         completed_at=None,
         success=None,
-        halfway_event_emitted=False,
+        progress_milestone_pct=0,
         requirements=requirements,
     )
 
@@ -108,8 +98,8 @@ def generate_tasks(*, run_seed, count, cfg=None):
     out = []
     for idx in range(1, count + 1):
         rng = streams.stream(f"task_{idx}")
-        requirements = _sample_requirements(rng, cfg)
         prestige = _sample_required_prestige(rng, cfg, index=idx - 1)
+        requirements = _sample_requirements(rng, cfg, prestige=prestige)
         out.append(_make_task(rng, cfg, prestige, serial=idx, requirements=requirements))
     return out
 
@@ -122,7 +112,6 @@ def build_task_rows(*, run_seed, count, cfg=None):
     for task in generated:
         task_rows.append({
             "title": task.title,
-            "description": task.description,
             "required_prestige": task.required_prestige,
             "reward_funds_cents": task.reward_funds_cents,
             "reward_prestige_delta": task.reward_prestige_delta,
@@ -133,7 +122,7 @@ def build_task_rows(*, run_seed, count, cfg=None):
             "deadline": task.deadline,
             "completed_at": task.completed_at,
             "success": task.success,
-            "halfway_event_emitted": task.halfway_event_emitted,
+            "progress_milestone_pct": task.progress_milestone_pct,
         })
         for domain, qty in task.requirements.items():
             requirement_rows.append({
@@ -150,8 +139,8 @@ def generate_replacement_task(*, run_seed, replenish_counter, cfg=None):
         cfg = WorldConfig()
     streams = RngStreams(run_seed)
     rng = streams.stream(f"replenish_{replenish_counter}")
-    requirements = _sample_requirements(rng, cfg)
     prestige = _sample_required_prestige(rng, cfg)
+    requirements = _sample_requirements(rng, cfg, prestige=prestige)
     return _make_task(rng, cfg, prestige, serial=replenish_counter, requirements=requirements)
 
 

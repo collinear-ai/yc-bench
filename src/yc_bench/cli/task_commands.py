@@ -27,12 +27,12 @@ def _get_world_cfg():
 task_app = typer.Typer(help="Task management commands.")
 
 
-def _compute_deadline(accepted_at: datetime, total_required_qty: float, cfg=None) -> datetime:
-    """Deadline: cfg.deadline_qty_per_day units per business day, minimum cfg.deadline_min_biz_days days."""
+def _compute_deadline(accepted_at: datetime, max_domain_qty: float, cfg=None) -> datetime:
+    """Deadline based on the heaviest single domain (domains are worked in parallel)."""
     if cfg is None:
         cfg = _get_world_cfg()
     work_hours = cfg.workday_end_hour - cfg.workday_start_hour
-    biz_days = max(cfg.deadline_min_biz_days, int(total_required_qty / cfg.deadline_qty_per_day))
+    biz_days = max(cfg.deadline_min_biz_days, int(max_domain_qty / cfg.deadline_qty_per_day))
     return add_business_hours(accepted_at, Decimal(str(biz_days)) * Decimal(str(work_hours)))
 
 
@@ -57,23 +57,24 @@ def task_accept(
         if task.status != TaskStatus.MARKET:
             error_output(f"Task {task_id} is not in market status (current: {task.status.value}).")
 
-        # Validate prestige requirement
+        # Validate per-domain prestige requirement
         company_id = sim_state.company_id
+        reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == tid).all()
         prestige_rows = db.query(CompanyPrestige).filter(
             CompanyPrestige.company_id == company_id
         ).all()
-        max_prestige = max((float(p.prestige_level) for p in prestige_rows), default=1.0)
+        prestige_map = {p.domain: float(p.prestige_level) for p in prestige_rows}
 
-        if task.required_prestige > max_prestige:
-            error_output(
-                f"Company max prestige ({max_prestige}) does not meet task requirement ({task.required_prestige})."
-            )
-
-        # Compute deadline
-        reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == tid).all()
-        total_qty = sum(float(r.required_qty) for r in reqs)
+        for req in reqs:
+            domain_prestige = prestige_map.get(req.domain, 1.0)
+            if task.required_prestige > domain_prestige:
+                error_output(
+                    f"Company prestige in {req.domain.value} ({domain_prestige:.1f}) "
+                    f"does not meet task requirement ({task.required_prestige})."
+                )
+        max_domain_qty = max(float(r.required_qty) for r in reqs)
         accepted_at = sim_state.sim_time
-        deadline = _compute_deadline(accepted_at, total_qty)
+        deadline = _compute_deadline(accepted_at, max_domain_qty)
 
         # Transition task
         task.status = TaskStatus.PLANNED
@@ -95,7 +96,6 @@ def task_accept(
             company_id=None,
             status=TaskStatus.MARKET,
             title=replacement.title,
-            description=replacement.description,
             required_prestige=replacement.required_prestige,
             reward_funds_cents=replacement.reward_funds_cents,
             reward_prestige_delta=replacement.reward_prestige_delta,
@@ -104,7 +104,7 @@ def task_accept(
             deadline=None,
             completed_at=None,
             success=None,
-            halfway_event_emitted=False,
+            progress_milestone_pct=0,
         )
         db.add(replacement_row)
 
@@ -185,7 +185,7 @@ def task_assign(
                 if t and t.status == TaskStatus.ACTIVE:
                     impacted.add(t.id)
             if impacted:
-                recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, half_threshold=_get_world_cfg().task_half_threshold)
+                recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, milestones=_get_world_cfg().task_progress_milestones)
 
         # Return current assignment list
         assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id == tid).all()
@@ -251,7 +251,7 @@ def task_dispatch(
                 peer_task = db.query(Task).filter(Task.id == pa.task_id).one_or_none()
                 if peer_task and peer_task.status == TaskStatus.ACTIVE:
                     impacted.add(peer_task.id)
-        recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, half_threshold=_get_world_cfg().task_half_threshold)
+        recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, milestones=_get_world_cfg().task_progress_milestones)
 
         json_output({
             "task_id": str(task.id),
@@ -353,7 +353,6 @@ def task_inspect(
         json_output({
             "task_id": str(task.id),
             "title": task.title,
-            "description": task.description,
             "status": task.status.value,
             "required_prestige": task.required_prestige,
             "reward_funds_cents": task.reward_funds_cents,
@@ -442,7 +441,7 @@ def task_cancel(
                     if t and t.status == TaskStatus.ACTIVE:
                         impacted.add(t.id)
         if impacted:
-            recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, half_threshold=_get_world_cfg().task_half_threshold)
+            recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, milestones=_get_world_cfg().task_progress_milestones)
 
         # Bankruptcy check
         company = db.query(Company).filter(Company.id == sim_state.company_id).one()

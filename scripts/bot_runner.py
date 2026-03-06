@@ -84,22 +84,22 @@ def estimate_completion_hours(task_reqs, employee_skills, n_concurrent_tasks=1):
     return max_hours
 
 
-def _compute_deadline(accepted_at, total_required_qty, cfg):
+def _compute_deadline(accepted_at, max_domain_qty, cfg):
     work_hours = cfg.workday_end_hour - cfg.workday_start_hour
-    biz_days = max(cfg.deadline_min_biz_days, int(total_required_qty / cfg.deadline_qty_per_day))
+    biz_days = max(cfg.deadline_min_biz_days, int(max_domain_qty / cfg.deadline_qty_per_day))
     return add_business_hours(accepted_at, Decimal(str(biz_days)) * Decimal(str(work_hours)))
 
 
 def _build_candidates(db, company_id, sim_state, world_cfg, emp_skills):
-    """Build CandidateTask list for all market tasks the company can see."""
+    """Build CandidateTask list for all market tasks the company can accept (per-domain prestige gating)."""
     prestige_rows = db.query(CompanyPrestige).filter(
         CompanyPrestige.company_id == company_id
     ).all()
-    max_prestige = max((float(p.prestige_level) for p in prestige_rows), default=1.0)
+    prestige_map = {p.domain: float(p.prestige_level) for p in prestige_rows}
+    min_prestige = min(prestige_map.values()) if prestige_map else 1.0
 
     market_tasks = db.query(Task).filter(
         Task.status == TaskStatus.MARKET,
-        Task.required_prestige <= int(max_prestige),
     ).order_by(Task.reward_funds_cents.desc()).all()
 
     all_skills = [{d: r for d, r in e["skills"].items()} for e in emp_skills]
@@ -109,14 +109,23 @@ def _build_candidates(db, company_id, sim_state, world_cfg, emp_skills):
         reqs = db.query(TaskRequirement).filter(
             TaskRequirement.task_id == task.id
         ).all()
-        total_qty = sum(float(r.required_qty) for r in reqs)
+
+        # Per-domain prestige check: all required domains must meet threshold
+        meets_prestige = all(
+            prestige_map.get(r.domain, 1.0) >= task.required_prestige
+            for r in reqs
+        )
+        if not meets_prestige:
+            continue
+
+        max_domain_qty = max(float(r.required_qty) for r in reqs)
         task_reqs = [{"domain": r.domain, "required_qty": float(r.required_qty)} for r in reqs]
 
         completion_hours = estimate_completion_hours(task_reqs, all_skills, n_concurrent_tasks=1)
 
         is_completable = False
         if completion_hours is not None:
-            deadline = _compute_deadline(sim_state.sim_time, total_qty, world_cfg)
+            deadline = _compute_deadline(sim_state.sim_time, max_domain_qty, world_cfg)
             completion_time = add_business_hours(sim_state.sim_time, completion_hours)
             is_completable = completion_time <= deadline
 
@@ -128,7 +137,7 @@ def _build_candidates(db, company_id, sim_state, world_cfg, emp_skills):
             is_completable=is_completable,
         ))
 
-    return candidates, max_prestige
+    return candidates, min_prestige
 
 
 # ── Strategy functions ──────────────────────────────────────────────────────
@@ -324,12 +333,12 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
             reqs = db.query(TaskRequirement).filter(
                 TaskRequirement.task_id == best_task.id
             ).all()
-            total_qty = sum(float(r.required_qty) for r in reqs)
+            max_domain_qty = max(float(r.required_qty) for r in reqs)
 
             best_task.status = TaskStatus.PLANNED
             best_task.company_id = company_id
             best_task.accepted_at = sim_state.sim_time
-            best_task.deadline = _compute_deadline(sim_state.sim_time, total_qty, world_cfg)
+            best_task.deadline = _compute_deadline(sim_state.sim_time, max_domain_qty, world_cfg)
 
             # Generate replacement
             counter = sim_state.replenish_counter
@@ -344,13 +353,12 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                 company_id=None,
                 status=TaskStatus.MARKET,
                 title=replacement.title,
-                description=replacement.description,
                 required_prestige=replacement.required_prestige,
                 reward_funds_cents=replacement.reward_funds_cents,
                 reward_prestige_delta=replacement.reward_prestige_delta,
                 skill_boost_pct=replacement.skill_boost_pct,
                 accepted_at=None, deadline=None, completed_at=None,
-                success=None, halfway_event_emitted=False,
+                success=None, progress_milestone_pct=0,
             )
             db.add(replacement_row)
             for domain, qty in replacement.requirements.items():
@@ -375,7 +383,7 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
 
             recalculate_etas(db, company_id, sim_state.sim_time,
                              impacted_task_ids={best_task.id},
-                             half_threshold=world_cfg.task_half_threshold)
+                             milestones=world_cfg.task_progress_milestones)
 
             task_cycles_used += 1
 

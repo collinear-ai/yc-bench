@@ -185,15 +185,20 @@ def recalculate_etas(
     company_id: UUID,
     now: datetime,
     impacted_task_ids: Optional[Set[UUID]] = None,
+    milestones: Optional[List[float]] = None,
+    # Legacy single-threshold parameter — ignored if milestones is provided.
     half_threshold: float = 0.5,
 ) -> None:
     """Recalculate projection events for active tasks.
 
     1. Delete stale projection events for impacted tasks (or all if None).
     2. Compute effective rates.
-    3. For each active task, solve completion and halfway times.
+    3. For each active task, solve completion and milestone times.
     4. Insert new projection events.
     """
+    if milestones is None:
+        milestones = [half_threshold]
+
     # Determine which tasks to recalculate
     if impacted_task_ids is None:
         active_tasks = db.query(Task).filter(
@@ -240,18 +245,26 @@ def recalculate_etas(
                 dedupe_key=f"task:{tid}:completed",
             )
 
-        # Halfway ETA (only if not already emitted)
-        if not task.halfway_event_emitted:
-            halfway_time = solve_task_halfway_time(db, tid, now, rates, half_threshold=half_threshold)
-            if halfway_time is not None:
+        # Progress milestone ETAs — skip milestones already emitted
+        emitted_pct = task.progress_milestone_pct or 0
+        for milestone in sorted(milestones):
+            milestone_pct = int(milestone * 100)
+            if milestone_pct <= emitted_pct:
+                continue
+            milestone_time = solve_task_halfway_time(db, tid, now, rates, half_threshold=milestone)
+            if milestone_time is not None:
                 insert_event(
                     db,
                     company_id=company_id,
                     event_type=EventType.TASK_HALF_PROGRESS,
-                    scheduled_at=halfway_time,
-                    payload={"task_id": str(tid)},
-                    dedupe_key=f"task:{tid}:half",
+                    scheduled_at=milestone_time,
+                    payload={"task_id": str(tid), "milestone_pct": milestone_pct},
+                    dedupe_key=f"task:{tid}:milestone:{milestone_pct}",
                 )
+                # Only insert the next upcoming milestone — it will be the
+                # earliest event; once consumed, recalculate_etas runs again
+                # and inserts the following one.
+                break
 
     db.flush()
 

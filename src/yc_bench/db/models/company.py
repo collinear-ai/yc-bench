@@ -10,13 +10,10 @@ from sqlalchemy.orm import mapped_column
 from ..base import Base
 
 class Domain(str, Enum):
-    SYSTEM = "system"
     RESEARCH = "research"
-    DATA = "data"
-    FRONTEND = "frontend"
-    BACKEND = "backend"
+    INFERENCE = "inference"
+    DATA_ENVIRONMENT = "data_environment"
     TRAINING = "training"
-    HARDWARE = "hardware"
 
 class Company(Base):
     __tablename__ = "companies"

@@ -58,7 +58,6 @@ def market_browse(
             results.append({
                 "task_id": str(task.id),
                 "title": task.title,
-                "description": task.description,
                 "required_prestige": task.required_prestige,
                 "reward_funds_cents": task.reward_funds_cents,
                 "reward_prestige_delta": float(task.reward_prestige_delta),

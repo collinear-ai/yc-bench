@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from ..config.schema import WorldConfig
@@ -7,6 +8,18 @@ from ..db.models.company import Domain
 from .rng import RngStreams, sample_right_skew_triangular_int
 
 _ALL_DOMAINS = list(Domain)
+_NUM_DOMAINS = len(_ALL_DOMAINS)
+
+# Fixed tier composition for a 10-person startup.
+# Repeated to cover any employee count via modular indexing.
+_TIER_SEQUENCE = [
+    "junior", "junior", "junior", "junior", "junior",
+    "mid", "mid", "mid",
+    "senior", "senior",
+]
+
+_MIN_RATE = 1.0
+_MAX_RATE = 10.0
 
 
 @dataclass(frozen=True)
@@ -22,16 +35,6 @@ def _salary_tiers(cfg):
     return (cfg.salary_junior, cfg.salary_mid, cfg.salary_senior)
 
 
-def _pick_tier_name(rng, cfg):
-    x = rng.random()
-    acc = 0.0
-    for tier in _salary_tiers(cfg):
-        acc += tier.share
-        if acc >= x:
-            return tier.name
-    return _salary_tiers(cfg)[-1].name
-
-
 def _tier_by_name(cfg, tier_name):
     for tier in _salary_tiers(cfg):
         if tier.name == tier_name:
@@ -44,10 +47,49 @@ def _sample_salary_cents(rng, cfg, tier_name):
     return sample_right_skew_triangular_int(rng, tier.min_cents, tier.max_cents)
 
 
-def _sample_rates_by_domain(rng, cfg, tier_name):
-    tier = _tier_by_name(cfg, tier_name)
-    lo, hi = tier.rate_min, tier.rate_max
-    return {domain: round(rng.uniform(lo, hi), 4) for domain in _ALL_DOMAINS}
+def _dirichlet_sample(rng, alpha, k):
+    """Sample from Dirichlet(alpha, ..., alpha) with k components."""
+    raw = [rng.gammavariate(alpha, 1.0) for _ in range(k)]
+    total = sum(raw)
+    if total == 0:
+        return [1.0 / k] * k
+    return [x / total for x in raw]
+
+
+def _distribute_rates(rng, avg_rate, dirichlet_alpha=0.3):
+    """Distribute a rate budget across domains with spiky concentration.
+
+    Each domain gets at least _MIN_RATE.  The extra budget is split via
+    Dirichlet(alpha) so that one or two domains can be dramatically higher
+    than the rest — a junior can secretly be a superstar in one domain.
+    Individual rates are capped at _MAX_RATE.
+    """
+    total_budget = avg_rate * _NUM_DOMAINS
+    extra = total_budget - _NUM_DOMAINS * _MIN_RATE
+
+    if extra <= 0:
+        return [_MIN_RATE] * _NUM_DOMAINS
+
+    proportions = _dirichlet_sample(rng, dirichlet_alpha, _NUM_DOMAINS)
+    rates = [_MIN_RATE + extra * p for p in proportions]
+
+    # Cap at _MAX_RATE and redistribute excess iteratively.
+    for _ in range(5):
+        overflow = 0.0
+        uncapped = []
+        for i in range(_NUM_DOMAINS):
+            if rates[i] > _MAX_RATE:
+                overflow += rates[i] - _MAX_RATE
+                rates[i] = _MAX_RATE
+            else:
+                uncapped.append(i)
+        if overflow <= 0 or not uncapped:
+            break
+        share = overflow / len(uncapped)
+        for i in uncapped:
+            rates[i] += share
+
+    return [round(r, 4) for r in rates]
 
 
 def generate_employees(*, run_seed, count, cfg=None):
@@ -56,12 +98,25 @@ def generate_employees(*, run_seed, count, cfg=None):
     if count <= 0:
         return []
 
-    employees = []
     streams = RngStreams(run_seed)
 
+    # Build and shuffle tier assignments.
+    tier_rng = streams.stream("tier_assignment")
+    seq_len = len(_TIER_SEQUENCE)
+    tiers = [_TIER_SEQUENCE[i % seq_len] for i in range(count)]
+    tier_rng.shuffle(tiers)
+
+    employees = []
     for idx in range(1, count + 1):
         rng = streams.stream(f"employee_{idx}")
-        tier_name = _pick_tier_name(rng, cfg)
+        tier_name = tiers[idx - 1]
+        tier_cfg = _tier_by_name(cfg, tier_name)
+
+        # Sample average rate uniformly within the tier's range.
+        avg_rate = rng.uniform(tier_cfg.rate_min, tier_cfg.rate_max)
+
+        domain_rates = _distribute_rates(rng, avg_rate)
+        rates = dict(zip(_ALL_DOMAINS, domain_rates))
 
         employees.append(
             GeneratedEmployee(
@@ -69,7 +124,7 @@ def generate_employees(*, run_seed, count, cfg=None):
                 work_hours_per_day=cfg.work_hours_per_day,
                 salary_cents=_sample_salary_cents(rng, cfg, tier_name),
                 tier=tier_name,
-                rates_by_domain=_sample_rates_by_domain(rng, cfg, tier_name),
+                rates_by_domain=rates,
             )
         )
     return employees

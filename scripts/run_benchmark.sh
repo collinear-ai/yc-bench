@@ -9,7 +9,7 @@
 set -euo pipefail
 
 SEEDS="1 2 3"
-CONFIG=challenge
+CONFIG=hard
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -30,6 +30,11 @@ class Employee(Base):
         String(255),
         nullable=False,
     )
+    tier = mapped_column(
+        String(20),
+        nullable=False,
+        default="junior",
+    )
     work_hours_per_day = mapped_column(
         Numeric(5, 2),
         nullable=False,

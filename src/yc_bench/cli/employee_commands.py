@@ -3,7 +3,7 @@ from __future__ import annotations
 import typer
 from sqlalchemy import func
 
-from ..db.models.employee import Employee, EmployeeSkillRate
+from ..db.models.employee import Employee
 from ..db.models.task import Task, TaskAssignment, TaskStatus
 from ..db.models.sim_state import SimState
 from . import get_db, json_output, error_output
@@ -25,15 +25,6 @@ def employee_list():
 
         results = []
         for emp in employees:
-            # Skills
-            skills = db.query(EmployeeSkillRate).filter(
-                EmployeeSkillRate.employee_id == emp.id
-            ).all()
-            skill_map = {
-                s.domain.value: float(s.rate_domain_per_hour)
-                for s in skills
-            }
-
             # Current active assignments
             active_assignments = (
                 db.query(TaskAssignment.task_id)
@@ -49,9 +40,9 @@ def employee_list():
             results.append({
                 "employee_id": str(emp.id),
                 "name": emp.name,
+                "tier": emp.tier,
                 "salary_cents": emp.salary_cents,
                 "work_hours_per_day": float(emp.work_hours_per_day),
-                "skills": skill_map,
                 "active_task_count": len(active_task_ids),
                 "active_task_ids": active_task_ids,
             })

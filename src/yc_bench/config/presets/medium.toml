@@ -36,11 +36,12 @@ horizon_years = 1
 auto_advance_after_turns = 8
 
 [world]
-num_employees    = 5
-num_market_tasks = 150
+# Inherits num_employees=10, num_market_tasks=200 from default.
 
-# Standard deadline pace — manageable with good allocation.
-deadline_qty_per_day = 200.0
+# Deadline uses max per-domain qty. 900/100 = 9 days.
+# 2 concurrent tasks: 5 per task → 4.3 days each. Manageable.
+# 3 concurrent tasks: 3.3 per task → 6.6 days. Risky.
+deadline_qty_per_day = 100.0
 
 # Real penalties — failing costs prestige, cancelling costs more.
 penalty_fail_multiplier   = 1.0

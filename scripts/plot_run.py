@@ -23,13 +23,10 @@ engine = build_engine()
 factory = build_session_factory(engine)
 
 DOMAIN_COLORS = {
-    "training": "#e67e22",
-    "research": "#3498db",
-    "backend":  "#2ecc71",
-    "hardware": "#9b59b6",
-    "data":     "#1abc9c",
-    "frontend": "#e74c3c",
-    "system":   "#95a5a6",
+    "research":         "#3498db",
+    "inference":        "#9b59b6",
+    "data_environment": "#1abc9c",
+    "training":         "#e67e22",
 }
 
 with session_scope(factory) as db:

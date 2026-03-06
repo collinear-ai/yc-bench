@@ -45,10 +45,6 @@ class Task(Base):
         String(255),
         nullable=False,
     )
-    description = mapped_column(
-        String,
-        nullable=False,
-    )
     required_prestige = mapped_column(
         Integer,
         nullable=False,
@@ -81,11 +77,11 @@ class Task(Base):
         Boolean,
         nullable=True,
     )
-    halfway_event_emitted = mapped_column(
-        Boolean,
+    progress_milestone_pct = mapped_column(
+        Integer,
         nullable=False,
-        default=False,
-        server_default=text("false"),
+        default=0,
+        server_default=text("0"),
     )
 
 class TaskRequirement(Base):

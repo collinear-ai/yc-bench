@@ -18,7 +18,7 @@ Your goal is to maximize company prestige and funds over the simulation horizon 
 
 ### Observe
 - `yc-bench company status` — funds, prestige, employee count, payroll, bankruptcy risk
-- `yc-bench employee list` — list all employees with IDs, salaries, skill rates, and current assignments
+- `yc-bench employee list` — list all employees with IDs, tier (junior/mid/senior), salaries, and current assignments
 - `yc-bench market browse [--domain X] [--required-prestige-lte N] [--reward-min-cents N] [--limit N] [--offset N]` — browse available tasks (default limit 50; the response includes a `total` field — if total > 50, paginate with --offset to see more)
 - `yc-bench task list [--status X]` — list your tasks (planned, active, completed, cancelled)
 - `yc-bench task inspect --task-id <UUID>` — detailed task info (requirements, assignments, progress)
@@ -106,7 +106,8 @@ def build_turn_context(
                 tid = ev.get("task_id", "?")
                 parts.append(f"- Task {tid}: {'SUCCESS' if success else 'FAILED'}")
             elif ev_type == "task_half":
-                parts.append(f"- Task {ev.get('task_id', '?')}: 50% progress reached")
+                pct = ev.get("milestone_pct", "?")
+                parts.append(f"- Task {ev.get('task_id', '?')}: {pct}% progress reached")
             elif ev_type == "horizon_end":
                 parts.append("- **Horizon end reached. Simulation complete.**")
             elif ev_type == "bankruptcy":

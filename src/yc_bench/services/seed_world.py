@@ -63,6 +63,7 @@ def _seed_employees(db, company, req):
             id=uuid4(),
             company_id=company.id,
             name=emp.name,
+            tier=emp.tier,
             work_hours_per_day=emp.work_hours_per_day,
             salary_cents=emp.salary_cents,
         )
@@ -86,7 +87,6 @@ def _seed_market_tasks(db, company, req):
             company_id=None,
             status=TaskStatus.MARKET,
             title=task.title,
-            description=task.description,
             required_prestige=task.required_prestige,
             reward_funds_cents=task.reward_funds_cents,
             reward_prestige_delta=task.reward_prestige_delta,
@@ -95,7 +95,7 @@ def _seed_market_tasks(db, company, req):
             deadline=None,
             completed_at=None,
             success=None,
-            halfway_event_emitted=False,
+            progress_milestone_pct=0,
         )
         db.add(task_row)
 
