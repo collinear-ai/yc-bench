@@ -26,7 +26,7 @@ DEFAULT_RUNS = [
     {"label": "kimi-k2.5",    "model_slug": "openrouter_moonshotai_kimi-k2.5",           "color": "#2ecc71"},
 ]
 
-INITIAL_FUNDS_CENTS = 25_000_000  # $250K
+INITIAL_FUNDS_CENTS = 15_000_000  # $150K (default; presets may override)
 
 
 def parse_args():
@@ -129,7 +129,7 @@ def make_plot(run_data, seed, config_name, budget_usd, out_path: Path):
 
     # ── Funds curves ─────────────────────────────────────────────────────────
     ax_funds.axhline(0, color="#e74c3c", linewidth=0.9, linestyle="--", alpha=0.4, zorder=1)
-    ax_funds.axhline(250_000, color="#555577", linewidth=0.7, linestyle=":", alpha=0.6, zorder=1)
+    ax_funds.axhline(INITIAL_FUNDS_CENTS / 100, color="#555577", linewidth=0.7, linestyle=":", alpha=0.6, zorder=1)
 
     for r in run_data:
         if not r["times"]:

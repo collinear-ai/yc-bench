@@ -346,6 +346,7 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
             replacement = generate_replacement_task(
                 run_seed=sim_state.run_seed,
                 replenish_counter=counter,
+                replaced_prestige=best_task.required_prestige,
                 cfg=world_cfg,
             )
             replacement_row = Task(

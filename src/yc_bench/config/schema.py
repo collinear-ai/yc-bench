@@ -39,7 +39,7 @@ class WorldDists(BaseModel):
     )
     # Base reward paid on task completion, in cents (result cast to int).
     reward_funds_cents: DistSpec = Field(
-        default_factory=lambda: TriangularDist(low=500_000, high=10_000_000, mode=3_000_000)
+        default_factory=lambda: TriangularDist(low=300_000, high=4_000_000, mode=1_400_000)
     )
     # Number of domains required per task (result cast to int).
     domain_count: DistSpec = Field(
@@ -105,7 +105,7 @@ class SimConfig(BaseModel):
 class WorldConfig(BaseModel):
     # --- Workforce ---
     num_employees: int = 10
-    initial_funds_cents: int = 25_000_000    # $250,000
+    initial_funds_cents: int = 15_000_000    # $150,000
     initial_prestige_level: float = 1.0
     work_hours_per_day: float = 9.0
 
@@ -128,7 +128,7 @@ class WorldConfig(BaseModel):
     # Daily prestige decay per domain. Domains not exercised lose prestige
     # over time: -0.01/day → -0.3/month → untouched domain drops ~1 level
     # every ~3 months. Floored at prestige_min.
-    prestige_decay_per_day: float = 0.01
+    prestige_decay_per_day: float = 0.005
 
     # Required qty scaling by prestige: qty *= 1 + prestige_qty_scale * (prestige - 1).
     # At 0.3: prestige-5 tasks need 2.2× the work of prestige-1 tasks.

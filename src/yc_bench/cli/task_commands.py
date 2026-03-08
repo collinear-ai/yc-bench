@@ -88,6 +88,7 @@ def task_accept(
         replacement = generate_replacement_task(
             run_seed=sim_state.run_seed,
             replenish_counter=counter,
+            replaced_prestige=task.required_prestige,
             cfg=_get_world_cfg(),
         )
 

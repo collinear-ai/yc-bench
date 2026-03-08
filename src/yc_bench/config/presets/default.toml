@@ -53,7 +53,7 @@ company_name  = "BenchCo"
 
 [world]
 num_employees            = 10
-initial_funds_cents      = 25_000_000    # $250,000
+initial_funds_cents      = 15_000_000    # $150,000
 initial_prestige_level   = 1.0
 work_hours_per_day       = 9.0
 
@@ -78,9 +78,9 @@ penalty_cancel_multiplier  = 2.0    # hardened: was 1.2
 reward_prestige_scale = 0.55    # hardened: was 0.3
 
 # Daily prestige decay per domain. Domains not exercised lose prestige
-# over time: -0.01/day → -0.3/month. Untouched domain drops ~1 level
-# every ~3 months. Prevents single-domain hyper-specialization.
-prestige_decay_per_day = 0.01
+# over time: -0.005/day → -0.15/month. Untouched domain drops ~1 level
+# every ~6 months. Prevents single-domain hyper-specialization.
+prestige_decay_per_day = 0.005
 
 # Required qty scaling by prestige: qty *= 1 + scale * (prestige - 1).
 # At 0.3: prestige-5 tasks need 2.2x the work of prestige-1 tasks.
@@ -90,7 +90,7 @@ prestige_qty_scale = 0.3
 # --- Deadline ---
 # Deadline = max(deadline_min_biz_days, max_domain_qty / deadline_qty_per_day).
 # Domains are worked in parallel, so deadline scales with heaviest domain, not sum.
-deadline_qty_per_day   = 150.0
+deadline_qty_per_day   = 200.0
 deadline_min_biz_days  = 7
 
 # --- Progress milestones (checkpoint events at these completion fractions) ---
@@ -120,12 +120,12 @@ high = 10
 mode = 4            # hardened: base default is mode=1
 
 # Base reward paid on task completion, in cents (scaled further by prestige).
-# Higher-prestige tasks automatically pay more via reward_prestige_scale.
+# Mode $14K: prestige-1 tasks burn cash, prestige-3 breaks even, prestige-4+ profits.
 [world.dist.reward_funds_cents]
 type = "triangular"
-low  = 500_000      # $5,000
-high = 10_000_000   # $100,000
-mode = 3_000_000    # $30,000
+low  = 300_000      # $3,000
+high = 4_000_000    # $40,000
+mode = 1_400_000    # $14,000
 
 # Number of domains each task requires work in (cast to int after sampling).
 # mode=2: most tasks need 2 domains — single-specialist dominance gone.
@@ -139,9 +139,9 @@ mode = 2            # hardened: base default is mode=1
 # No trivially-small tasks: every task requires sustained employee-hours.
 [world.dist.required_qty]
 type = "triangular"
-low  = 500          # hardened: base default is 200
-high = 3000
-mode = 1400         # hardened: base default is 800
+low  = 800          # hardened: base default is 200
+high = 4000
+mode = 2000         # hardened: base default is 800
 
 # Prestige delta awarded per domain on task success.
 # Mean ~0.1: climbing prestige 1→5 takes ~40 tasks.

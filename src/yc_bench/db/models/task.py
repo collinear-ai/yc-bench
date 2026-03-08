@@ -87,7 +87,7 @@ class Task(Base):
 class TaskRequirement(Base):
     __tablename__ = "task_requirements"
     __table_args__ = (
-        CheckConstraint("required_qty >= 200 AND required_qty <= 3000", name="ck_task_requirements_required_qty_range"),
+        CheckConstraint("required_qty >= 200 AND required_qty <= 25000", name="ck_task_requirements_required_qty_range"),
         CheckConstraint("completed_qty >= 0", name="ck_task_requirements_completed_qty_gte_0"),
         CheckConstraint("completed_qty <= required_qty", name="ck_task_requirements_completed_qty_lte_required_qty"),
     )

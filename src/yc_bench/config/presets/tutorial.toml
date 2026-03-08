@@ -28,10 +28,11 @@ horizon_years = 1
 auto_advance_after_turns = 5
 
 [world]
+initial_funds_cents = 25_000_000    # $250,000 — very forgiving buffer
 # Inherits num_employees=10, num_market_tasks=200 from default.
 
-# Very generous deadlines: 30 qty/day → most tasks get 13+ day deadline.
-deadline_qty_per_day = 30.0
+# Generous deadlines: 50 qty/day → mode task gets 12-day deadline.
+deadline_qty_per_day = 50.0
 
 # Negligible penalties — mistakes barely hurt.
 penalty_fail_multiplier   = 0.3
@@ -53,6 +54,6 @@ value = 1        # ALL tasks single-domain — trivial assignment.
 
 [world.dist.required_qty]
 type = "triangular"
-low  = 200
-high = 800
-mode = 400       # Small tasks, quick completions.
+low  = 300
+high = 1200
+mode = 600       # Moderate tasks, comfortable with focused execution.

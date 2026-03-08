@@ -178,6 +178,13 @@ def advance_time(
             result.payrolls_applied += 1
             payroll_idx += 1
 
+            # Report payroll as a wake event so the agent gets control back
+            company = db.query(Company).filter(Company.id == company_id).one()
+            result.wake_events.append({
+                "type": "monthly_payroll",
+                "funds_after": company.funds_cents,
+            })
+
             if bankrupt:
                 # Insert bankruptcy event at this time
                 insert_event(
@@ -188,7 +195,9 @@ def advance_time(
                     dedupe_key=f"bankruptcy:{current_time.isoformat()}",
                 )
                 result.bankrupt = True
-                break
+
+            # Always stop at payroll — gives the agent a chance to act
+            break
 
         elif action_type == "event":
             event_result = dispatch_event(db, next_event, current_time, company_id)

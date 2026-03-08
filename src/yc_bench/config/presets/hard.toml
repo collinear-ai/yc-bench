@@ -40,12 +40,13 @@ horizon_years = 1
 auto_advance_after_turns = 10
 
 [world]
+initial_funds_cents = 10_000_000    # $100,000 — must reach prestige 3 by month 5
 # Inherits num_employees=10, num_market_tasks=200 from default.
 
-# Tight deadlines: 1200/150 = 8 days.
-# 1 task with 5 per domain → 5.8 days. OK.
-# 2 concurrent tasks → 11.6 days. Miss.
-deadline_qty_per_day = 150.0
+# Tight deadlines: 2000/220 = 9.1 days.
+# 1 task with 5 per domain → 8.7 days. Just fits.
+# 2 concurrent tasks → 17.4 days. Guaranteed miss.
+deadline_qty_per_day = 220.0
 
 # Stiff penalties — mistakes cost real prestige.
 penalty_fail_multiplier   = 1.4
@@ -71,6 +72,6 @@ mode = 2        # Most tasks need 2 domains.
 
 [world.dist.required_qty]
 type = "triangular"
-low  = 500
-high = 2500
-mode = 1200     # Large tasks — require sustained focus.
+low  = 1000
+high = 4000
+mode = 2000     # Large tasks — each takes ~9 days with full team. No parallelism.

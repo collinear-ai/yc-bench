@@ -38,10 +38,10 @@ auto_advance_after_turns = 8
 [world]
 # Inherits num_employees=10, num_market_tasks=200 from default.
 
-# Deadline uses max per-domain qty. 900/100 = 9 days.
-# 2 concurrent tasks: 5 per task → 4.3 days each. Manageable.
-# 3 concurrent tasks: 3.3 per task → 6.6 days. Risky.
-deadline_qty_per_day = 100.0
+# Deadline uses max per-domain qty. 1500/150 = 10 days.
+# 1 task with 5 per domain → 6.5 days. Comfortable.
+# 2 concurrent tasks → 13 days. Miss.
+deadline_qty_per_day = 150.0
 
 # Real penalties — failing costs prestige, cancelling costs more.
 penalty_fail_multiplier   = 1.0
@@ -67,6 +67,6 @@ mode = 2        # Most tasks need 2 domains.
 
 [world.dist.required_qty]
 type = "triangular"
-low  = 400
-high = 2000
-mode = 900      # Moderate work — completable in 7–12 days with focus.
+low  = 700
+high = 3000
+mode = 1500     # Larger tasks — ~6.5 days with full team, no parallelism.

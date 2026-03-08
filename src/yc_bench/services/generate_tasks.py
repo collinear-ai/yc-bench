@@ -27,10 +27,9 @@ class GeneratedTask:
     requirements: dict[str, int]
 
 
-# First 10 market tasks are given explicit prestige values to guarantee a
-# climbable ladder from the start (avoids runs where all early tasks need
-# prestige 4+ before any are completable).
-_STRATIFIED_PRESTIGE = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4]
+# First 10 market tasks are forced to prestige 1 to guarantee a
+# bootstrapping path regardless of the prestige distribution.
+_STRATIFIED_PRESTIGE = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
 _ALL_DOMAINS = list(Domain)
 
@@ -134,14 +133,14 @@ def build_task_rows(*, run_seed, count, cfg=None):
     return task_rows, requirement_rows
 
 
-def generate_replacement_task(*, run_seed, replenish_counter, cfg=None):
+def generate_replacement_task(*, run_seed, replenish_counter, replaced_prestige, cfg=None):
+    """Generate a replacement task with the same prestige as the accepted task."""
     if cfg is None:
         cfg = WorldConfig()
     streams = RngStreams(run_seed)
     rng = streams.stream(f"replenish_{replenish_counter}")
-    prestige = _sample_required_prestige(rng, cfg)
-    requirements = _sample_requirements(rng, cfg, prestige=prestige)
-    return _make_task(rng, cfg, prestige, serial=replenish_counter, requirements=requirements)
+    requirements = _sample_requirements(rng, cfg, prestige=replaced_prestige)
+    return _make_task(rng, cfg, replaced_prestige, serial=replenish_counter, requirements=requirements)
 
 
 __all__ = [
