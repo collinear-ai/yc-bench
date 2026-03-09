@@ -16,6 +16,8 @@ dependencies = [
     "litellm>=1.40",
     "python-dotenv>=1.0",
     "matplotlib>=3.10.8",
+    "streamlit>=1.55.0",
+    "plotly>=6.6.0",
 ]
 
 [project.optional-dependencies]
