@@ -4,6 +4,7 @@ from typing import Optional
 
 import typer
 
+from ..db.models.client import Client
 from ..db.models.company import Domain
 from ..db.models.task import Task, TaskRequirement, TaskStatus
 from ..config import get_world_config
@@ -55,10 +56,19 @@ def market_browse(
                 }
                 for r in reqs
             ]
+            # Look up client name
+            client_name = None
+            if task.client_id is not None:
+                client_row = db.query(Client).filter(Client.id == task.client_id).one_or_none()
+                if client_row:
+                    client_name = client_row.name
+
             results.append({
                 "task_id": str(task.id),
                 "title": task.title,
+                "client_name": client_name,
                 "required_prestige": task.required_prestige,
+                "required_trust": task.required_trust,
                 "reward_funds_cents": task.reward_funds_cents,
                 "reward_prestige_delta": float(task.reward_prestige_delta),
                 "skill_boost_pct": float(task.skill_boost_pct),

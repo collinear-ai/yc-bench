@@ -16,6 +16,7 @@ from ..agent.runtime.factory import build_runtime
 from ..agent.runtime.schemas import RuntimeSettings
 from ..db.session import build_engine, build_session_factory, session_scope, init_db
 from .args import parse_run_args
+from .extract import extract_time_series
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ def _parse_date(date_str: str) -> datetime:
 
 def _wipe_simulation(db) -> None:
     """Delete all simulation rows so the DB can be reseeded cleanly."""
+    from ..db.models.client import Client, ClientTrust
     from ..db.models.ledger import LedgerEntry
     from ..db.models.task import Task, TaskAssignment, TaskRequirement
     from ..db.models.employee import Employee, EmployeeSkillRate
@@ -49,6 +51,8 @@ def _wipe_simulation(db) -> None:
     db.query(EmployeeSkillRate).delete(synchronize_session=False)
     db.query(Employee).delete(synchronize_session=False)
     db.query(CompanyPrestige).delete(synchronize_session=False)
+    db.query(ClientTrust).delete(synchronize_session=False)
+    db.query(Client).delete(synchronize_session=False)
     db.query(Company).delete(synchronize_session=False)
     db.query(SimState).delete(synchronize_session=False)
     db.flush()
@@ -276,6 +280,7 @@ def run_benchmark(args):
 
     # 9. Save full rollout (with transcript) and print summary
     rollout = final_state.full_rollout()
+    rollout["time_series"] = extract_time_series(db_factory, company_id)
     summary = final_state.summary()
     logger.info("Run complete: %s", json.dumps(summary, indent=2))
 

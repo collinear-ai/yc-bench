@@ -14,6 +14,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ...db.models.client import ClientTrust
 from ...db.models.company import Company, CompanyPrestige, Domain
 from ...db.models.employee import Employee, EmployeeSkillRate
 from ...config import get_world_config
@@ -28,6 +29,7 @@ class TaskCompleteResult:
     success: bool
     funds_delta: int = 0
     prestige_changes: Dict[str, float] = field(default_factory=dict)
+    trust_delta: float = 0.0
     bankrupt: bool = False
 
 
@@ -126,6 +128,27 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
                 )
                 prestige_changes[req.domain.value] = float(prestige.prestige_level) - old
 
+    # --- Client trust update ---
+    trust_delta = 0.0
+    if task.client_id is not None:
+        ct = db.query(ClientTrust).filter(
+            ClientTrust.company_id == company_id,
+            ClientTrust.client_id == task.client_id,
+        ).one_or_none()
+        if ct is not None:
+            if success:
+                # Diminishing returns: gain = base × (1 - trust/max)^power
+                ratio = float(ct.trust_level) / wc.trust_max
+                gain = wc.trust_gain_base * ((1 - ratio) ** wc.trust_gain_diminishing_power)
+                new_level = min(wc.trust_max, float(ct.trust_level) + gain)
+                trust_delta = new_level - float(ct.trust_level)
+                ct.trust_level = Decimal(str(round(new_level, 3)))
+            else:
+                old_level = float(ct.trust_level)
+                new_level = max(wc.trust_min, old_level - wc.trust_fail_penalty)
+                trust_delta = new_level - old_level
+                ct.trust_level = Decimal(str(round(new_level, 3)))
+
     db.flush()
 
     # Check bankruptcy
@@ -137,5 +160,6 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
         success=success,
         funds_delta=funds_delta,
         prestige_changes=prestige_changes,
+        trust_delta=trust_delta,
         bankrupt=bankrupt,
     )

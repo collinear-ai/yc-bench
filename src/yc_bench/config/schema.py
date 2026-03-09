@@ -54,6 +54,10 @@ class WorldDists(BaseModel):
     reward_prestige_delta: DistSpec = Field(
         default_factory=lambda: BetaDist(alpha=1.2, beta=2.8, scale=0.35, low=0.0, high=0.35)
     )
+    # Trust level required to accept exclusive tasks (sampled for ~20% of tasks).
+    required_trust: DistSpec = Field(
+        default_factory=lambda: TriangularDist(low=1, high=5, mode=2)
+    )
     # Skill rate boost fraction applied to each assigned employee on task success.
     skill_boost: DistSpec = Field(
         default_factory=lambda: NormalDist(mean=0.12, stdev=0.06, low=0.01, high=0.40)
@@ -129,6 +133,18 @@ class WorldConfig(BaseModel):
     # over time: -0.01/day → -0.3/month → untouched domain drops ~1 level
     # every ~3 months. Floored at prestige_min.
     prestige_decay_per_day: float = 0.005
+
+    # --- Client trust ---
+    num_clients: int = 8
+    trust_max: float = 5.0
+    trust_min: float = 0.0
+    trust_gain_base: float = 0.15
+    trust_gain_diminishing_power: float = 1.5
+    trust_fail_penalty: float = 0.3
+    trust_cancel_penalty: float = 0.5
+    trust_decay_per_day: float = 0.02
+    trust_reward_scale: float = 0.15      # reward × (1 + scale × trust)
+    trust_exclusive_task_fraction: float = 0.20  # 20% of tasks require trust > 0
 
     # Required qty scaling by prestige: qty *= 1 + prestige_qty_scale * (prestige - 1).
     # At 0.3: prestige-5 tasks need 2.2× the work of prestige-1 tasks.

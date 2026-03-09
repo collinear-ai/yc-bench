@@ -19,6 +19,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ..db.models.client import ClientTrust
 from ..db.models.company import Company, CompanyPrestige
 from ..db.models.employee import Employee
 from ..db.models.event import EventType, SimEvent
@@ -90,6 +91,7 @@ def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id:
             "task_id": str(result.task_id),
             "success": result.success,
             "funds_delta": result.funds_delta,
+            "trust_delta": result.trust_delta,
             "bankrupt": result.bankrupt,
         }
 
@@ -114,6 +116,19 @@ def apply_prestige_decay(db: Session, company_id: UUID, days_elapsed: float) -> 
     rows = db.query(CompanyPrestige).filter(CompanyPrestige.company_id == company_id).all()
     for row in rows:
         row.prestige_level = max(floor, row.prestige_level - decay)
+    db.flush()
+
+
+def apply_trust_decay(db: Session, company_id: UUID, days_elapsed: float) -> None:
+    """Reduce trust for all clients by decay_rate x days. Floors at trust_min."""
+    wc = get_world_config()
+    if wc.trust_decay_per_day <= 0 or days_elapsed <= 0:
+        return
+    decay = Decimal(str(wc.trust_decay_per_day * days_elapsed))
+    floor = Decimal(str(wc.trust_min))
+    rows = db.query(ClientTrust).filter(ClientTrust.company_id == company_id).all()
+    for row in rows:
+        row.trust_level = max(floor, row.trust_level - decay)
     db.flush()
 
 
@@ -167,6 +182,7 @@ def advance_time(
             days_elapsed = (action_time - current_time).total_seconds() / 86400.0
             flush_progress(db, company_id, current_time, action_time)
             apply_prestige_decay(db, company_id, days_elapsed)
+            apply_trust_decay(db, company_id, days_elapsed)
             current_time = action_time
 
         if action_type == "target":

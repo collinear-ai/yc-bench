@@ -7,10 +7,12 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from ..config.schema import WorldConfig
+from ..db.models.client import Client, ClientTrust
 from ..db.models.company import Company, CompanyPrestige, Domain
 from ..db.models.employee import Employee, EmployeeSkillRate
 from ..db.models.task import Task, TaskRequirement, TaskStatus
 
+from .generate_clients import generate_clients
 from .generate_employees import generate_employees
 from .generate_tasks import generate_tasks
 
@@ -79,12 +81,31 @@ def _seed_employees(db, company, req):
             )
 
 
-def _seed_market_tasks(db, company, req):
+def _seed_clients(db, company, req):
+    """Create Client rows and ClientTrust rows (all starting at 0.0)."""
+    generated = generate_clients(run_seed=req.run_seed, count=req.cfg.num_clients)
+    clients = []
+    for gc in generated:
+        client = Client(id=uuid4(), name=gc.name)
+        db.add(client)
+        clients.append(client)
+        db.add(ClientTrust(
+            company_id=company.id,
+            client_id=client.id,
+            trust_level=0,
+        ))
+    db.flush()
+    return clients
+
+
+def _seed_market_tasks(db, company, req, clients):
     generated = generate_tasks(run_seed=req.run_seed, count=req.market_task_count, cfg=req.cfg)
     for task in generated:
+        client = clients[task.client_index % len(clients)] if clients else None
         task_row = Task(
             id=uuid4(),
             company_id=None,
+            client_id=client.id if client else None,
             status=TaskStatus.MARKET,
             title=task.title,
             required_prestige=task.required_prestige,
@@ -96,6 +117,7 @@ def _seed_market_tasks(db, company, req):
             completed_at=None,
             success=None,
             progress_milestone_pct=0,
+            required_trust=task.required_trust,
         )
         db.add(task_row)
 
@@ -121,7 +143,8 @@ def seed_world(db, req):
     company = _seed_company(db, req)
     _seed_company_prestige(db, company, req.cfg)
     _seed_employees(db, company, req)
-    _seed_market_tasks(db, company, req)
+    clients = _seed_clients(db, company, req)
+    _seed_market_tasks(db, company, req, clients)
 
     return SeedWorldResult(
         company_id=company.id,

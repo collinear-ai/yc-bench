@@ -24,6 +24,7 @@ class Task(Base):
         CheckConstraint("skill_boost_pct >= 0", name="ck_tasks_skill_boost_pct_range"),
         CheckConstraint("reward_funds_cents >= 0", name="ck_tasks_reward_funds_cents_gte_0"),
         CheckConstraint("reward_prestige_delta >= 0 AND reward_prestige_delta <= 5", name="ck_tasks_reward_prestige_delta_range"),
+        CheckConstraint("required_trust >= 0 AND required_trust <= 5", name="ck_tasks_required_trust_range"),
     )
 
     id = mapped_column(
@@ -34,6 +35,11 @@ class Task(Base):
     company_id = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    client_id = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("clients.id", ondelete="SET NULL"),
         nullable=True,
     )
     status = mapped_column(
@@ -78,6 +84,12 @@ class Task(Base):
         nullable=True,
     )
     progress_milestone_pct = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    required_trust = mapped_column(
         Integer,
         nullable=False,
         default=0,

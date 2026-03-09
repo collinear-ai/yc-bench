@@ -67,6 +67,7 @@ from .finance_commands import finance_app  # noqa: E402
 from .report_commands import report_app    # noqa: E402
 from .employee_commands import employee_app  # noqa: E402
 from .scratchpad_commands import scratchpad_app  # noqa: E402
+from .client_commands import client_app  # noqa: E402
 
 app.add_typer(sim_app, name="sim")
 app.add_typer(company_app, name="company")
@@ -76,6 +77,7 @@ app.add_typer(task_app, name="task")
 app.add_typer(finance_app, name="finance")
 app.add_typer(report_app, name="report")
 app.add_typer(scratchpad_app, name="scratchpad")
+app.add_typer(client_app, name="client")
 
 
 @app.command("start")

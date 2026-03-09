@@ -19,9 +19,10 @@ Your goal is to maximize company prestige and funds over the simulation horizon 
 ### Observe
 - `yc-bench company status` — funds, prestige, employee count, payroll, bankruptcy risk
 - `yc-bench employee list` — list all employees with IDs, tier (junior/mid/senior), salaries, and current assignments
-- `yc-bench market browse [--domain X] [--required-prestige-lte N] [--reward-min-cents N] [--limit N] [--offset N]` — browse available tasks (default limit 50; the response includes a `total` field — if total > 50, paginate with --offset to see more)
+- `yc-bench market browse [--domain X] [--required-prestige-lte N] [--reward-min-cents N] [--limit N] [--offset N]` — browse available tasks (default limit 50; the response includes a `total` field — if total > 50, paginate with --offset to see more). Tasks show `client_name` and `required_trust`.
 - `yc-bench task list [--status X]` — list your tasks (planned, active, completed, cancelled)
-- `yc-bench task inspect --task-id <UUID>` — detailed task info (requirements, assignments, progress)
+- `yc-bench task inspect --task-id <UUID>` — detailed task info (requirements, assignments, progress, client, trust requirement)
+- `yc-bench client list` — show all clients with current trust levels
 - `yc-bench finance ledger [--from MM/DD/YYYY] [--to MM/DD/YYYY] [--category X]` — financial history
 - `yc-bench report monthly [--from-month YYYY-MM] [--to-month YYYY-MM]` — monthly P&L
 - `yc-bench scratchpad read` — read your persistent notes
@@ -53,12 +54,22 @@ Your goal is to maximize company prestige and funds over the simulation horizon 
 
 ## Key Rules
 
-- Task completion at or before deadline = success (reward funds + prestige + skill boost)
-- Task completion after deadline = failure (0.8x prestige penalty, no reward)
-- Task cancellation = 1.2x prestige penalty per domain
+- Task completion at or before deadline = success (reward funds + prestige + skill boost + client trust gain)
+- Task completion after deadline = failure (0.8x prestige penalty, no reward, trust penalty)
+- Task cancellation = 1.2x prestige penalty per domain + trust penalty (worse than failure)
 - Employee throughput = base_rate / number_of_active_tasks_assigned
 - Time advances only when you run `yc-bench sim resume`
 - Prestige is clamped [1, 10]. Funds are in cents.
+
+## Client Trust
+
+- Each task is offered by a specific **client** (e.g. "Nexus AI", "Vertex Labs").
+- Completing tasks for a client builds **trust** [0.0–5.0]. Trust gains diminish as you approach max.
+- Higher trust = higher pay: reward multiplier = 1 + 0.15 × trust_level (applied at accept time).
+- Some tasks require minimum trust level (`required_trust > 0`). These pay ~1.3x more.
+- **Trust decays** daily — relationships need maintenance through continued work.
+- **Failures hurt**: -0.3 trust. **Cancellations hurt more**: -0.5 trust.
+- Use `yc-bench client list` to monitor trust levels across all clients.
 """
 
 
