@@ -1,0 +1,143 @@
+# Employee Model
+
+**Location**: `src/yc_bench/db/models/employee.py`, `src/yc_bench/services/generate_employees.py`, `src/yc_bench/core/progress.py`
+
+## Overview
+
+Employees are the company's productive resources. Each has a tier, salary, and hidden per-domain skill rates. The agent must figure out who is good at what through observation and assign them optimally.
+
+## Design Choices
+
+### Hidden Skill Rates (Information Asymmetry)
+
+The agent sees:
+- Employee name, tier (junior/mid/senior), salary
+- Which tasks they're currently assigned to
+
+The agent does NOT see:
+- Per-domain skill rates (`rate_domain_per_hour`)
+- Actual work output per hour
+
+**Why hidden?** This is a core benchmark design decision:
+1. **Tests inference ability**: The agent must infer strengths from task completion patterns
+2. **Mirrors reality**: Real managers don't have exact productivity metrics for every skill dimension
+3. **Creates learning opportunity**: Early task assignments serve as "probes" to discover team capabilities
+4. **Rewards memory**: Agents that remember past performance can make better future assignments
+
+### Tier System
+
+| Tier | Typical Rate Range | Salary Range |
+|------|-------------------|--------------|
+| junior | Low | Low |
+| mid | Medium | Medium |
+| senior | High | High |
+
+**Design choice**: Tiers provide a rough signal. Seniors are generally better but not always in every domain. A junior might excel in one domain while a senior is mediocre there. The tier-salary correlation creates a cost-benefit trade-off.
+
+### Per-Domain Skill Rates
+
+Each employee has 4 skill rates (one per domain):
+
+```python
+class EmployeeSkillRate:
+    domain: str          # research, inference, data_environment, training
+    rate_domain_per_hour: float  # work units produced per business hour
+```
+
+Rates are generated from configurable distributions (triangular, beta, etc.) during world seeding. Some employees are specialists (high in one domain, low in others); some are generalists.
+
+**Design choice**: The 4-rate vector per employee creates a rich assignment optimization space. Optimal assignment requires matching employee strengths to task domain requirements.
+
+## Throughput Splitting
+
+When an employee works on multiple active tasks simultaneously:
+
+```
+effective_rate = base_rate / num_active_tasks
+```
+
+**Design choice**: Linear splitting (not diminishing returns or context-switching penalties) was chosen for simplicity and predictability. The agent can reason about it without hidden costs.
+
+### Example
+
+Employee Alice has `research_rate = 2.0/hr`:
+- Assigned to 1 task: contributes 2.0 research units/hour
+- Assigned to 3 tasks: contributes 0.67 research units/hour to each
+
+### Implication for Strategy
+
+The agent faces a fundamental trade-off:
+- **Focused assignment**: 1 employee → 1 task = fastest completion but no parallelism
+- **Spread assignment**: 1 employee → N tasks = slower per task but progress on multiple fronts
+- **Optimal**: Match the strategy to deadline pressure and task urgency
+
+## Skill Growth
+
+On successful task completion, assigned employees get a skill boost:
+
+```python
+for each assigned employee:
+    for each domain in task.requirements:
+        skill_rate[domain] *= (1 + task.skill_boost_pct / 100)
+```
+
+**Design choice**: Skill growth compounds over time. Early investments in employee development pay off later through faster task completion. This creates a "training vs. exploiting" tension.
+
+### Salary Bumps (Hidden Cost of Growth)
+
+Each task completion also increases salaries:
+
+```python
+for each assigned employee:
+    salary_cents *= 1.01  # 1% increase
+```
+
+**Design choice**: Salary bumps mean that experienced employees cost more. The agent can't infinitely scale employee productivity without also scaling costs. After many completions, payroll may become a significant burden.
+
+## Employee Generation (`generate_employees.py`)
+
+### Process
+
+1. Generate 10 employees per company (configurable)
+2. Assign tiers based on configured distribution (e.g., 30% junior, 40% mid, 30% senior)
+3. For each employee, generate 4 skill rates from per-tier distributions
+4. Set salary based on tier bracket
+
+### Distribution Types
+
+Skill rates are drawn from configurable distributions:
+- **Triangular**: min/mode/max (default -- creates realistic bell-curve-like distributions)
+- **Beta**: alpha/beta parameters (useful for skewed distributions)
+- **Normal**: mean/std (truncated to positive values)
+- **Uniform**: low/high
+- **Constant**: fixed value
+
+**Design choice**: Configurable distributions allow difficulty presets to create different workforce profiles. Tutorial mode might use tight distributions (predictable employees), while nightmare mode uses wide distributions (unpredictable).
+
+## Employee Visibility to Agent
+
+The `employee list` CLI command returns:
+
+```json
+{
+  "employees": [
+    {
+      "id": "uuid",
+      "name": "Alice Chen",
+      "tier": "senior",
+      "salary": "$8,000/mo",
+      "active_tasks": 2
+    }
+  ]
+}
+```
+
+Note: no skill rates, no per-domain breakdown, no historical performance. The agent must build this knowledge through experience.
+
+## Strategic Considerations
+
+1. **Discovery phase**: Early on, assign different employees to different domain tasks to learn strengths
+2. **Specialization**: Once strengths are known, match employees to their best domains
+3. **Load balancing**: Avoid overloading one employee (throughput splitting penalty)
+4. **Growth investment**: Assign employees to tasks in domains where they need improvement
+5. **Cost awareness**: Track which employees have had many salary bumps
