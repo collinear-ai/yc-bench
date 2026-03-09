@@ -31,7 +31,7 @@ auto_advance_after_turns = 5
 initial_funds_cents = 25_000_000    # $250,000 — very forgiving buffer
 # Inherits num_employees=10, num_market_tasks=200 from default.
 
-# Generous deadlines: 50 qty/day → mode task gets 12-day deadline.
+# Generous deadlines: 600/50 = 12 days. Very comfortable.
 deadline_qty_per_day = 50.0
 
 # Negligible penalties — mistakes barely hurt.

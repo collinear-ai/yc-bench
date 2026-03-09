@@ -96,8 +96,10 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
                         EmployeeSkillRate.domain == domain,
                     ).one_or_none()
                     if skill is not None:
-                        boost = skill.rate_domain_per_hour * task.skill_boost_pct
-                        skill.rate_domain_per_hour += boost
+                        skill.rate_domain_per_hour = min(
+                            skill.rate_domain_per_hour + task.skill_boost_pct,
+                            Decimal("10"),
+                        )
 
         # Salary bump: small raise for each employee who contributed to this task
         if wc.salary_bump_pct > 0:

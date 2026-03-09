@@ -43,12 +43,7 @@ from yc_bench.services.seed_world import SeedWorldRequest, seed_world_transactio
 CONFIGS = ["medium", "hard", "nightmare"]
 SEEDS = [1, 2, 3]
 
-# Cap task cycles to match LLM throughput.  An LLM gets 500 turns and needs
-# ~5 turns per task cycle (browse + accept + 5× assign + dispatch + resume),
-# so it can complete at most ~100 tasks.  The sim still runs to horizon —
-# once the budget is exhausted the bot just advances time (paying salaries,
-# bleeding cash) exactly like an LLM that hit max_turns.
-MAX_TASK_CYCLES = 100
+MAX_TASK_CYCLES = None  # No cap — bot plays until horizon end
 
 
 @dataclass
@@ -60,25 +55,31 @@ class CandidateTask:
     is_completable: bool
 
 
-def estimate_completion_hours(task_reqs, employee_skills, n_concurrent_tasks=1):
-    """Estimate hours to complete task with all employees assigned."""
-    domain_rates = {}
-    for req in task_reqs:
-        domain = req["domain"]
-        total_rate = Decimal("0")
-        for emp in employee_skills:
-            rate = emp.get(domain, Decimal("0"))
-            total_rate += rate / Decimal(n_concurrent_tasks)
-        domain_rates[domain] = total_rate
+# Tier-average rates: E[uniform(0, max_rate)] = max_rate / 2.
+# The LLM agent only sees tier + salary, not actual per-domain rates.
+_TIER_AVG_RATE = {
+    "junior": Decimal("2.0"),   # uniform(0, 4) => E=2.0
+    "mid": Decimal("3.5"),      # uniform(0, 7) => E=3.5
+    "senior": Decimal("5.0"),   # uniform(0, 10) => E=5.0
+}
+
+
+def estimate_completion_hours(task_reqs, employee_tiers, n_concurrent_tasks=1):
+    """Estimate hours to complete task using tier-average rates (blind to actual skills).
+
+    employee_tiers is a list of tier strings like ["junior", "mid", "senior", ...].
+    Each employee is assumed to contribute their tier's average rate to every domain.
+    """
+    total_rate = sum(_TIER_AVG_RATE[t] for t in employee_tiers)
+    effective_rate = total_rate / Decimal(n_concurrent_tasks)
+
+    if effective_rate <= 0:
+        return None
 
     max_hours = Decimal("0")
     for req in task_reqs:
-        domain = req["domain"]
         qty = Decimal(str(req["required_qty"]))
-        rate = domain_rates.get(domain, Decimal("0"))
-        if rate <= 0:
-            return None
-        hours = qty / rate
+        hours = qty / effective_rate
         if hours > max_hours:
             max_hours = hours
     return max_hours
@@ -90,8 +91,12 @@ def _compute_deadline(accepted_at, max_domain_qty, cfg):
     return add_business_hours(accepted_at, Decimal(str(biz_days)) * Decimal(str(work_hours)))
 
 
-def _build_candidates(db, company_id, sim_state, world_cfg, emp_skills):
-    """Build CandidateTask list for all market tasks the company can accept (per-domain prestige gating)."""
+def _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers):
+    """Build CandidateTask list for all market tasks the company can accept (per-domain prestige gating).
+
+    Uses tier-average rates (blind to actual per-domain skills) to mirror
+    the information available to an LLM agent.
+    """
     prestige_rows = db.query(CompanyPrestige).filter(
         CompanyPrestige.company_id == company_id
     ).all()
@@ -101,8 +106,6 @@ def _build_candidates(db, company_id, sim_state, world_cfg, emp_skills):
     market_tasks = db.query(Task).filter(
         Task.status == TaskStatus.MARKET,
     ).order_by(Task.reward_funds_cents.desc()).all()
-
-    all_skills = [{d: r for d, r in e["skills"].items()} for e in emp_skills]
 
     candidates = []
     for task in market_tasks:
@@ -121,7 +124,7 @@ def _build_candidates(db, company_id, sim_state, world_cfg, emp_skills):
         max_domain_qty = max(float(r.required_qty) for r in reqs)
         task_reqs = [{"domain": r.domain, "required_qty": float(r.required_qty)} for r in reqs]
 
-        completion_hours = estimate_completion_hours(task_reqs, all_skills, n_concurrent_tasks=1)
+        completion_hours = estimate_completion_hours(task_reqs, employee_tiers, n_concurrent_tasks=1)
 
         is_completable = False
         if completion_hours is not None:
@@ -284,30 +287,12 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                     break
                 continue
 
-            # No active task — if we've used up our task budget, just
-            # advance time (pay salaries, bleed cash) like an LLM that
-            # hit max_turns would.
-            if task_cycles_used >= MAX_TASK_CYCLES:
-                next_event = fetch_next_event(db, company_id, sim_state.horizon_end)
-                if next_event is None:
-                    adv = advance_time(db, company_id, sim_state.horizon_end)
-                    break
-                adv = advance_time(db, company_id, next_event.scheduled_at)
-                if adv.bankrupt or adv.horizon_reached:
-                    break
-                continue
-
-            # Get employees and build candidates
+            # Get employees — only tier info (same as LLM agent sees)
             employees = db.query(Employee).filter(Employee.company_id == company_id).all()
-            emp_skills = []
-            for emp in employees:
-                skills = db.query(EmployeeSkillRate).filter(
-                    EmployeeSkillRate.employee_id == emp.id
-                ).all()
-                skill_map = {s.domain: Decimal(s.rate_domain_per_hour) for s in skills}
-                emp_skills.append({"id": emp.id, "skills": skill_map})
+            employee_tiers = [emp.tier for emp in employees]
+            employee_ids = [emp.id for emp in employees]
 
-            candidates, max_prestige = _build_candidates(db, company_id, sim_state, world_cfg, emp_skills)
+            candidates, max_prestige = _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers)
             completable = [c for c in candidates if c.is_completable]
 
             context = {
@@ -371,10 +356,10 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                 ))
 
             # Assign ALL employees
-            for e in emp_skills:
+            for eid in employee_ids:
                 db.add(TaskAssignment(
                     task_id=best_task.id,
-                    employee_id=e["id"],
+                    employee_id=eid,
                     assigned_at=sim_state.sim_time,
                 ))
             db.flush()

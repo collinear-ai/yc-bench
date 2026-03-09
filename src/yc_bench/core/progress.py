@@ -65,7 +65,8 @@ def _rates_by_employee_domain(rates):
         m[(r.employee_id, r.domain)] = r.rate_domain_per_hour
     return m
 
-def _effective_rate_for_task_domain(*, task_id, domain, assignments, assignment_counts, base_rates):
+def _effective_rate_for_task_domain(*, task_id, domain, assignments,
+                                    assignment_counts, base_rates):
     total = Decimal("0")
     for a in assignments:
         if a.task_id != task_id:
@@ -226,7 +227,7 @@ def compute_effective_rates(db, company_id):
     for a in assignments:
         assignments_by_task.setdefault(a.task_id, []).append(a)
         assignment_counts[a.employee_id] = assignment_counts.get(a.employee_id, 0) + 1
-    
+
     employee_ids = list(assignment_counts.keys())
     skill_rows = db.query(EmployeeSkillRate).filter(EmployeeSkillRate.employee_id.in_(employee_ids)).all()
 
@@ -243,7 +244,7 @@ def compute_effective_rates(db, company_id):
                 continue
             base = base_rates.get((a.employee_id, req.domain), Decimal("0"))
             total += base / Decimal(k)
-        
+
         out.append(EffectiveRate(
             task_id=req.task_id,
             domain=req.domain,

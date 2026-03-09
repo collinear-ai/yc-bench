@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from ..config.schema import WorldConfig
@@ -17,9 +16,6 @@ _TIER_SEQUENCE = [
     "mid", "mid", "mid",
     "senior", "senior",
 ]
-
-_MIN_RATE = 1.0
-_MAX_RATE = 10.0
 
 
 @dataclass(frozen=True)
@@ -47,49 +43,9 @@ def _sample_salary_cents(rng, cfg, tier_name):
     return sample_right_skew_triangular_int(rng, tier.min_cents, tier.max_cents)
 
 
-def _dirichlet_sample(rng, alpha, k):
-    """Sample from Dirichlet(alpha, ..., alpha) with k components."""
-    raw = [rng.gammavariate(alpha, 1.0) for _ in range(k)]
-    total = sum(raw)
-    if total == 0:
-        return [1.0 / k] * k
-    return [x / total for x in raw]
-
-
-def _distribute_rates(rng, avg_rate, dirichlet_alpha=0.3):
-    """Distribute a rate budget across domains with spiky concentration.
-
-    Each domain gets at least _MIN_RATE.  The extra budget is split via
-    Dirichlet(alpha) so that one or two domains can be dramatically higher
-    than the rest — a junior can secretly be a superstar in one domain.
-    Individual rates are capped at _MAX_RATE.
-    """
-    total_budget = avg_rate * _NUM_DOMAINS
-    extra = total_budget - _NUM_DOMAINS * _MIN_RATE
-
-    if extra <= 0:
-        return [_MIN_RATE] * _NUM_DOMAINS
-
-    proportions = _dirichlet_sample(rng, dirichlet_alpha, _NUM_DOMAINS)
-    rates = [_MIN_RATE + extra * p for p in proportions]
-
-    # Cap at _MAX_RATE and redistribute excess iteratively.
-    for _ in range(5):
-        overflow = 0.0
-        uncapped = []
-        for i in range(_NUM_DOMAINS):
-            if rates[i] > _MAX_RATE:
-                overflow += rates[i] - _MAX_RATE
-                rates[i] = _MAX_RATE
-            else:
-                uncapped.append(i)
-        if overflow <= 0 or not uncapped:
-            break
-        share = overflow / len(uncapped)
-        for i in uncapped:
-            rates[i] += share
-
-    return [round(r, 4) for r in rates]
+def _sample_domain_rates(rng, max_rate):
+    """Sample each domain's rate independently from 0 to max_rate."""
+    return [round(rng.uniform(0, max_rate), 4) for _ in range(_NUM_DOMAINS)]
 
 
 def generate_employees(*, run_seed, count, cfg=None):
@@ -112,10 +68,7 @@ def generate_employees(*, run_seed, count, cfg=None):
         tier_name = tiers[idx - 1]
         tier_cfg = _tier_by_name(cfg, tier_name)
 
-        # Sample average rate uniformly within the tier's range.
-        avg_rate = rng.uniform(tier_cfg.rate_min, tier_cfg.rate_max)
-
-        domain_rates = _distribute_rates(rng, avg_rate)
+        domain_rates = _sample_domain_rates(rng, max_rate=tier_cfg.rate_max)
         rates = dict(zip(_ALL_DOMAINS, domain_rates))
 
         employees.append(
