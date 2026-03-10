@@ -44,8 +44,8 @@ initial_funds_cents = 10_000_000    # $100,000 — must reach prestige 3 by mont
 # Inherits num_employees=10, num_market_tasks=200 from default.
 
 # Tight deadlines: 2000/220 = 9.1 days.
-# 1 task with 5 per domain → 8.7 days. Just fits.
-# 2 concurrent tasks → 17.4 days. Guaranteed miss.
+# With domain specialization (some employees have 0 in some domains),
+# effective team per domain is smaller — completion time varies by task.
 deadline_qty_per_day = 220.0
 
 # Stiff penalties — mistakes cost real prestige.

@@ -53,8 +53,7 @@ initial_funds_cents = 8_000_000     # $80,000 — razor-thin runway
 # Inherits num_employees=10, num_market_tasks=200 from default.
 
 # Razor deadlines: 2500/220 = 11.4 days.
-# 1 task with 5 per domain → 10.9 days. Barely fits.
-# 2 concurrent tasks → 21.8 days. Guaranteed miss.
+# With domain specialization, effective team is smaller — razor-tight.
 deadline_qty_per_day = 220.0
 
 # Catastrophic penalties — there is no good exit from a bad accept.

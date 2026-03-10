@@ -38,9 +38,7 @@ auto_advance_after_turns = 8
 [world]
 # Inherits num_employees=10, num_market_tasks=200 from default.
 
-# Deadline uses max per-domain qty. 1500/150 = 10 days.
-# 1 task with 5 per domain → 6.5 days. Comfortable.
-# 2 concurrent tasks → 13 days. Miss.
+# Deadline: 1500/150 = 10 days. Moderate pressure.
 deadline_qty_per_day = 150.0
 
 # Real penalties — failing costs prestige, cancelling costs more.

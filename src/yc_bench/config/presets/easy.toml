@@ -31,7 +31,7 @@ auto_advance_after_turns = 8
 initial_funds_cents = 20_000_000    # $200,000
 # Inherits num_employees=10, num_market_tasks=200 from default.
 
-# Moderate deadlines: 100 qty/day → 10-day deadline for mode task.
+# Moderate deadlines: 1000/100 = 10 days. Comfortable margin.
 deadline_qty_per_day = 100.0
 
 # Original (un-hardened) penalties — costly but not catastrophic.
