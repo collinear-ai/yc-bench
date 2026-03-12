@@ -1,0 +1,43 @@
+{
+  "session_id": "run-1-openrouter/anthropic/claude-haiku-4-5",
+  "model": "openrouter/anthropic/claude-haiku-4-5",
+  "seed": 1,
+  "horizon_years": 1,
+  "total_episodes": 3,
+  "terminal": true,
+  "terminal_reason": "bankruptcy",
+  "terminal_detail": "bankruptcy",
+  "started_at": "2026-03-12T01:47:36.650022+00:00",
+  "ended_at": "2026-03-12T01:57:25.802024+00:00",
+  "turns_completed": 193,
+  "total_cost_usd": 6.014085,
+  "episodes": [
+    {
+      "episode": 1,
+      "turns_completed": 29,
+      "terminal_reason": "bankruptcy",
+      "terminal_detail": "bankruptcy",
+      "cost_usd": 0.737144,
+      "started_at": "2026-03-12T01:40:17.341900+00:00",
+      "ended_at": "2026-03-12T01:43:04.213804+00:00"
+    },
+    {
+      "episode": 2,
+      "turns_completed": 43,
+      "terminal_reason": "bankruptcy",
+      "terminal_detail": "bankruptcy",
+      "cost_usd": 1.054148,
+      "started_at": "2026-03-12T01:43:04.602496+00:00",
+      "ended_at": "2026-03-12T01:47:36.518577+00:00"
+    },
+    {
+      "episode": 3,
+      "turns_completed": 121,
+      "terminal_reason": "bankruptcy",
+      "terminal_detail": "bankruptcy",
+      "cost_usd": 4.222793,
+      "started_at": "2026-03-12T01:47:36.650022+00:00",
+      "ended_at": "2026-03-12T01:57:25.802024+00:00"
+    }
+  ]
+}

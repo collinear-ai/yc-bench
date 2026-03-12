@@ -118,6 +118,7 @@ def run_agent_loop(
     max_turns: int | None = None,
     on_turn_start=None,
     on_turn=None,
+    episode: int = 1,
 ) -> RunState:
     run_state.start()
     turns_since_resume = 0  # consecutive turns without sim resume
@@ -136,7 +137,7 @@ def run_agent_loop(
         if run_state.turn_count == 0:
             with db_factory() as db:
                 snapshot = _snapshot_state(db, company_id)
-            user_input = build_initial_user_prompt(**snapshot)
+            user_input = build_initial_user_prompt(**snapshot, episode=episode)
         elif run_state.next_user_input is not None:
             user_input = run_state.next_user_input
             run_state.next_user_input = None

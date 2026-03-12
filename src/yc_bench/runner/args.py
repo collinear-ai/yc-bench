@@ -13,6 +13,7 @@ class RunArgs:
     start_date: str
     config_name: str = "default"
     no_live: bool = False
+    max_episodes: int = 1
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -32,6 +33,10 @@ def build_parser():
         "--no-live", action="store_true", default=False,
         help="Disable the live terminal dashboard (show raw log output instead)",
     )
+    parser.add_argument(
+        "--max-episodes", type=int, default=1,
+        help="Max episodes (restarts after bankruptcy with scratchpad carried over). Default: 1",
+    )
     return parser
 
 def parse_run_args(argv):
@@ -46,10 +51,13 @@ def parse_run_args(argv):
         start_date=ns.start_date,
         config_name=ns.config_name,
         no_live=ns.no_live,
+        max_episodes=ns.max_episodes,
     )
 
 def _validate(ns, parser):
     if ns.horizon_years is not None and ns.horizon_years <= 0:
         parser.error("--horizon-years must be int > 0")
+    if ns.max_episodes < 1:
+        parser.error("--max-episodes must be int >= 1")
 
 __all__ = ["RunArgs", "build_parser", "parse_run_args"]

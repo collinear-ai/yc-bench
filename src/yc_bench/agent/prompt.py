@@ -141,6 +141,7 @@ def build_initial_user_prompt(
     employee_count: int,
     monthly_payroll_cents: int,
     bankrupt: bool,
+    episode: int = 1,
 ) -> str:
     """Build the one-time initial user message at run start."""
     runway_months = (
@@ -156,7 +157,18 @@ def build_initial_user_prompt(
     )
     runway_str = f"~{runway_months} months" if runway_months is not None else "∞"
 
-    lines = [
+    lines = []
+    if episode > 1:
+        lines.extend([
+            f"## Episode {episode} — Restarting After Bankruptcy",
+            "",
+            f"You went bankrupt in episode {episode - 1}. The simulation has been reset,",
+            "but your **scratchpad notes from the previous episode are preserved**.",
+            "Read your scratchpad (`yc-bench scratchpad read`) to review your notes",
+            "and learn from past mistakes before taking action.",
+            "",
+        ])
+    lines.extend([
         "## Simulation Start — Take Immediate Action",
         f"- current_time: {sim_time}",
         f"- horizon_end: {horizon_end}",
@@ -177,7 +189,7 @@ def build_initial_user_prompt(
         "6. `yc-bench sim resume` — advance time to collect the first task completion event",
         "",
         "Do not spend multiple turns just browsing. Accept and dispatch tasks immediately.",
-    ]
+    ])
     if bankrupt:
         lines.append("WARNING: company is already bankrupt at initialization.")
     return "\n".join(lines)

@@ -97,6 +97,10 @@ def run_command_cli(
         help="Preset name ('default', 'fast_test', 'high_reward') or path to a .toml file",
     ),
     no_live: bool = typer.Option(False, "--no-live", help="Disable the live terminal dashboard"),
+    max_episodes: int = typer.Option(
+        1, "--max-episodes",
+        help="Max episodes (restarts after bankruptcy with scratchpad carried over). Default: 1",
+    ),
 ):
     """Run a full benchmark: migrate DB, seed world, run agent loop to completion."""
     from dotenv import find_dotenv, load_dotenv
@@ -112,6 +116,7 @@ def run_command_cli(
         start_date=start_date,
         config_name=config_name,
         no_live=no_live,
+        max_episodes=max_episodes,
     )
     raise SystemExit(run_benchmark(args))
 

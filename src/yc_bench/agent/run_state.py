@@ -41,6 +41,10 @@ class RunState:
     next_user_input: Optional[str] = None
     total_cost_usd: float = 0.0
 
+    # Multi-episode tracking
+    current_episode: int = 1
+    episode_results: List[Dict[str, Any]] = field(default_factory=list)
+
     def start(self) -> None:
         self.started_at = datetime.now(timezone.utc).isoformat()
 
@@ -66,18 +70,14 @@ class RunState:
             return True
         return False
 
-    def full_rollout(self) -> Dict[str, Any]:
-        """Full results including transcript for saving to disk."""
-        return {
-            "session_id": self.session_id,
-            "model": self.model,
-            "seed": self.seed,
-            "horizon_years": self.horizon_years,
+    def finish_episode(self) -> Dict[str, Any]:
+        """Snapshot current episode state into episode_results and return it."""
+        episode_data = {
+            "episode": self.current_episode,
             "turns_completed": self.turn_count,
-            "terminal": self.terminal,
             "terminal_reason": self.terminal_reason.value if self.terminal_reason else None,
             "terminal_detail": self.terminal_detail,
-            "total_cost_usd": round(self.total_cost_usd, 6),
+            "cost_usd": round(self.total_cost_usd, 6),
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "transcript": [
@@ -91,11 +91,66 @@ class RunState:
                 for t in self.transcript
             ],
         }
+        self.episode_results.append(episode_data)
+        return episode_data
+
+    def reset_for_new_episode(self) -> None:
+        """Reset mutable state for a new episode, preserving episode_results."""
+        self.current_episode += 1
+        self.turn_count = 0
+        self.terminal = False
+        self.terminal_reason = None
+        self.terminal_detail = None
+        self.started_at = None
+        self.ended_at = None
+        self.transcript = []
+        self.next_user_input = None
+        self.total_cost_usd = 0.0
+
+    def full_rollout(self) -> Dict[str, Any]:
+        """Full results including transcript for saving to disk."""
+        base = {
+            "session_id": self.session_id,
+            "model": self.model,
+            "seed": self.seed,
+            "horizon_years": self.horizon_years,
+            "total_episodes": self.current_episode,
+            "terminal": self.terminal,
+            "terminal_reason": self.terminal_reason.value if self.terminal_reason else None,
+            "terminal_detail": self.terminal_detail,
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+        }
+        if self.episode_results:
+            # Multi-episode: include all episode data
+            total_turns = sum(ep["turns_completed"] for ep in self.episode_results)
+            total_cost = sum(ep["cost_usd"] for ep in self.episode_results)
+            base["turns_completed"] = total_turns
+            base["total_cost_usd"] = round(total_cost, 6)
+            base["episodes"] = self.episode_results
+        else:
+            # Single-episode (backward compat): flat transcript
+            base["turns_completed"] = self.turn_count
+            base["total_cost_usd"] = round(self.total_cost_usd, 6)
+            base["transcript"] = [
+                {
+                    "turn": t.turn,
+                    "timestamp": t.timestamp,
+                    "user_input": t.user_input,
+                    "agent_output": t.agent_output,
+                    "commands_executed": t.commands_executed,
+                }
+                for t in self.transcript
+            ]
+        return base
 
     def summary(self) -> Dict[str, Any]:
         """Summary without transcript for logging."""
         rollout = self.full_rollout()
         rollout.pop("transcript", None)
+        if "episodes" in rollout:
+            for ep in rollout["episodes"]:
+                ep.pop("transcript", None)
         return rollout
 
 
