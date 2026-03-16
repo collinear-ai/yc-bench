@@ -256,6 +256,7 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
             horizon_years=cfg.sim.horizon_years,
             employee_count=world_cfg.num_employees,
             market_task_count=world_cfg.num_market_tasks,
+            cfg=world_cfg,
             start_date=start_dt,
         )
         result = seed_world_transactional(db, req)
@@ -333,22 +334,14 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                     TaskRequirement.task_id == task.id
                 ).all()
 
-                # Apply trust reward multiplier and work reduction
+                # Apply trust work reduction (no reward multiplier)
                 if task.client_id is not None:
-                    from yc_bench.db.models.client import Client, ClientTrust
-                    client_row = db.query(Client).filter(Client.id == task.client_id).one_or_none()
-                    client_multiplier = client_row.reward_multiplier if client_row else 1.0
+                    from yc_bench.db.models.client import ClientTrust
                     ct = db.query(ClientTrust).filter(
                         ClientTrust.company_id == company_id,
                         ClientTrust.client_id == task.client_id,
                     ).one_or_none()
                     trust_level = float(ct.trust_level) if ct else 0.0
-                    trust_multiplier = (
-                        world_cfg.trust_base_multiplier
-                        + (client_multiplier ** 2) * world_cfg.trust_reward_scale
-                        * (trust_level ** 2) / world_cfg.trust_max
-                    )
-                    task.reward_funds_cents = int(task.reward_funds_cents * trust_multiplier)
                     work_reduction = world_cfg.trust_work_reduction_max * (trust_level / world_cfg.trust_max)
                     for r in reqs:
                         r.required_qty = int(float(r.required_qty) * (1 - work_reduction))

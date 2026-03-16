@@ -26,8 +26,8 @@ class SeedWorldRequest:
     horizon_years: int
     employee_count: int
     market_task_count: int
+    cfg: WorldConfig
     start_date: datetime | None = None
-    cfg: WorldConfig = field(default_factory=WorldConfig)
 
 
 @dataclass(frozen=True)

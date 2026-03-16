@@ -63,6 +63,8 @@ market_browse_default_limit  = 50
 # Salary bump per completed task — each assigned employee gets this raise.
 # Compounds over time, accelerating payroll pressure.
 salary_bump_pct = 0.01
+salary_max_cents = 10_000_000   # cap individual salary at $100K/month
+skill_rate_max   = 10.0         # cap employee skill rate
 
 # --- Prestige mechanics ---
 prestige_max  = 10.0

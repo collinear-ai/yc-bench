@@ -150,15 +150,13 @@ def _make_task(rng, cfg, prestige, serial, requirements, client_index=0):
     )
 
 
-def generate_tasks(*, run_seed, count, cfg=None, client_specialties=None):
+def generate_tasks(*, run_seed, count, cfg, client_specialties=None):
     """Generate market tasks.
 
     Args:
         client_specialties: list of specialty domain lists, one per client index.
             e.g. [["research", "training"], ["inference"]] for 2 clients.
     """
-    if cfg is None:
-        cfg = WorldConfig()
     if count <= 0:
         return []
 
@@ -176,7 +174,7 @@ def generate_tasks(*, run_seed, count, cfg=None, client_specialties=None):
     return out
 
 
-def build_task_rows(*, run_seed, count, cfg=None):
+def build_task_rows(*, run_seed, count, cfg):
     generated = generate_tasks(run_seed=run_seed, count=count, cfg=cfg)
     task_rows = []
     requirement_rows = []
@@ -208,10 +206,8 @@ def build_task_rows(*, run_seed, count, cfg=None):
     return task_rows, requirement_rows
 
 
-def generate_replacement_task(*, run_seed, replenish_counter, replaced_prestige, replaced_client_index=0, cfg=None, specialty_domains=None):
+def generate_replacement_task(*, run_seed, replenish_counter, replaced_prestige, replaced_client_index=0, cfg, specialty_domains=None):
     """Generate a replacement task with the same prestige and client as the accepted task."""
-    if cfg is None:
-        cfg = WorldConfig()
     streams = RngStreams(run_seed)
     rng = streams.stream(f"replenish_{replenish_counter}")
     requirements = _sample_requirements(rng, cfg, prestige=replaced_prestige, specialty_domains=specialty_domains)

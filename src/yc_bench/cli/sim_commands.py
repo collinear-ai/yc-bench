@@ -57,6 +57,7 @@ def sim_init(
             horizon_years=horizon_years,
             employee_count=employee_count,
             market_task_count=market_task_count,
+            cfg=_wc,
             start_date=start_dt,
         )
         result = seed_world_transactional(db, req)

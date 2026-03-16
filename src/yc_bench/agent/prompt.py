@@ -40,19 +40,6 @@ Your goal is to maximize company prestige and funds over the simulation horizon 
 - `yc-bench task cancel --task-id <UUID> --reason "text"` — cancel a task (prestige penalty: 1.2x reward delta)
 - `yc-bench sim resume` — advance simulation to the next checkpoint event and return wake events
 
-## Strategy Guidelines
-
-1. **Check company status first** to understand your financial position, runway, and **current prestige levels per domain**.
-2. **Browse the market at your prestige level** — use `--required-prestige-lte N` where N matches your highest prestige. Higher-prestige tasks pay significantly more (prestige-5 tasks pay ~2.2x more than prestige-1). As your prestige grows, ALWAYS increase your browse filter to find better-paying tasks.
-3. **Accept tasks** that match your capabilities and offer good reward-to-risk ratio.
-4. **Assign employees strategically** — employees split throughput across active tasks. Focus employees on fewer tasks for faster completion.
-5. **Dispatch tasks** once assigned, then continue monitoring progress/events via status and reports.
-6. **Monitor deadlines** — completing after deadline causes failure (0.8x prestige penalty). Cancel hopeless tasks early (1.2x penalty, but stops bleeding time).
-7. **Watch payroll** — monthly salaries are deducted automatically. Don't let runway drop to zero.
-8. **Use status checks** to track critical milestones and risks.
-9. **Successful tasks** award funds + prestige + employee skill boosts. Build momentum.
-10. **Scale up over time** — regularly check `yc-bench company status` to see your prestige. Browse higher-prestige tasks as you grow — staying on prestige-1 tasks when you have prestige 5+ leaves enormous revenue on the table.
-
 ## Key Rules
 
 - Task completion at or before deadline = success (reward funds + prestige + skill boost + client trust gain)
@@ -65,31 +52,14 @@ Your goal is to maximize company prestige and funds over the simulation horizon 
 ## Client Trust
 
 - Each task is offered by a specific **client** (e.g. "Nexus AI", "Vertex Labs").
-- Trust affects TWO things: **reward** and **work required**.
+- Each client has **specialty domains** (e.g. "research", "training"). Tasks from a client are biased toward their specialties.
+- Use `yc-bench client list` to see each client's specialties and current trust level.
 
-### Client Tiers and Specialties
-- Clients are classified into **tiers**: Standard, Premium, Enterprise. Higher tiers have higher reward potential at high trust.
-- Each client has **specialty domains** (e.g. "research", "training"). Tasks from a client are biased toward their specialties — a client specializing in "research" will mostly offer research-heavy tasks.
-- Use `yc-bench client list` to see each client's tier, specialties, and current trust level.
-
-### Reward Scaling
-- Listed rewards are **potential** — actual payout depends on trust. Without trust, you only receive about **50%** of the listed reward.
-- As trust grows, payouts increase significantly. Higher-tier clients scale better but start worse.
-- Observe actual payouts over time to gauge each client's true value.
-
-### Work Reduction
-- **Trusted clients give clearer specs** — work required shrinks with trust (up to 40% reduction at max trust).
-- This compounds with higher rewards: at high trust, you earn more in less time.
-
-### Strategy
-- **Domain alignment matters most**: Pick clients whose specialties match your company's prestige strengths. A Premium client aligned with your best domains may outperform an Enterprise client where you're weak.
-- **Focus on 2-3 clients** to build trust fast. Scattered work = perpetual low payouts + full work load.
-- **Compounding loop**: trust → less work → faster completion → more tasks per month → more trust → even better returns.
-- **Higher-tier clients are riskier early**: they pay less than Standard clients at low trust, but become very rewarding at high trust. Standard clients are safer to start with.
+### Mechanics
 - Completing tasks for a client builds **trust** [0.0–5.0]. Trust gains diminish as you approach max.
-- **Premium tasks require trust**: High-reward tasks require established trust (required_trust 1-4). Clients don't give their best projects to unproven vendors.
-- **Trust decays** daily — relationships need maintenance through continued work.
-- **Failures hurt**: -0.3 trust. **Cancellations hurt more**: -0.5 trust.
+- Trusted clients require less work (up to 35% reduction at max trust).
+- Some tasks require minimum trust to accept (required_trust 1-4).
+- Trust decays daily. Task failure and cancellation reduce trust.
 """
 
 

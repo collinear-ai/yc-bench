@@ -44,10 +44,8 @@ class GeneratedClient:
     specialty_domains: list[str] = field(default_factory=list)
 
 
-def generate_clients(*, run_seed: int, count: int, cfg: WorldConfig | None = None) -> list[GeneratedClient]:
+def generate_clients(*, run_seed: int, count: int, cfg: WorldConfig) -> list[GeneratedClient]:
     """Generate clients with seeded reward multipliers, tiers, and specialty domains."""
-    if cfg is None:
-        cfg = WorldConfig()
     if count <= 0:
         return []
     if count > len(_CLIENT_NAME_POOL):

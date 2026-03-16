@@ -5,14 +5,8 @@ from .schema import ExperimentConfig, AgentConfig, LoopConfig, SimConfig, WorldC
 
 
 def get_world_config() -> WorldConfig:
-    """Load WorldConfig from the active experiment (YC_BENCH_EXPERIMENT env var, default: 'default').
-
-    Falls back to default WorldConfig if config loading fails (e.g. outside a benchmark run).
-    """
-    try:
-        return load_config(os.environ.get("YC_BENCH_EXPERIMENT", "default")).world
-    except Exception:
-        return WorldConfig()
+    """Load WorldConfig from the active experiment (YC_BENCH_EXPERIMENT env var, default: 'default')."""
+    return load_config(os.environ.get("YC_BENCH_EXPERIMENT", "default")).world
 
 
 __all__ = [

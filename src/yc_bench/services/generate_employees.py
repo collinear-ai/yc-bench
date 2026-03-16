@@ -48,9 +48,7 @@ def _sample_domain_rates(rng, min_rate, max_rate):
     return [round(rng.uniform(min_rate, max_rate), 4) for _ in range(_NUM_DOMAINS)]
 
 
-def generate_employees(*, run_seed, count, cfg=None):
-    if cfg is None:
-        cfg = WorldConfig()
+def generate_employees(*, run_seed, count, cfg):
     if count <= 0:
         return []
 
@@ -83,7 +81,7 @@ def generate_employees(*, run_seed, count, cfg=None):
     return employees
 
 
-def build_employee_rows(*, run_seed, company_id, count, cfg=None):
+def build_employee_rows(*, run_seed, company_id, count, cfg):
     generated = generate_employees(run_seed=run_seed, count=count, cfg=cfg)
     employee_rows = []
     skill_rows = []

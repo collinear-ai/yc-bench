@@ -90,19 +90,10 @@ def task_accept(
                     f"does not meet task requirement ({task.required_trust})."
                 )
 
-        # Apply trust reward multiplier and work reduction at accept time
+        # Apply trust work reduction at accept time (no reward multiplier —
+        # faster completion from trust already increases revenue via throughput).
         _cfg = _get_world_cfg()
         if task.client_id is not None:
-            client_row = db.query(Client).filter(Client.id == task.client_id).one_or_none()
-            client_multiplier = client_row.reward_multiplier if client_row else 1.0
-            # Reward: continuous formula
-            trust_multiplier = (
-                _cfg.trust_base_multiplier
-                + (client_multiplier ** 2) * _cfg.trust_reward_scale
-                * (trust_level ** 2) / _cfg.trust_max
-            )
-            task.reward_funds_cents = int(task.reward_funds_cents * trust_multiplier)
-            # Work reduction: trusted clients give clearer specs → less work
             work_reduction = _cfg.trust_work_reduction_max * (trust_level / _cfg.trust_max)
             for r in reqs:
                 r.required_qty = int(float(r.required_qty) * (1 - work_reduction))

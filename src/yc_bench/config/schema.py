@@ -107,50 +107,44 @@ class SimConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 class WorldConfig(BaseModel):
+    """All world-generation parameters.
+
+    No defaults — every field must be set explicitly in the TOML preset.
+    This prevents silent drift between schema.py and the preset files.
+    """
+
     # --- Workforce ---
-    num_employees: int = 10
-    initial_funds_cents: int = 15_000_000    # $150,000
-    initial_prestige_level: float = 1.0
-    work_hours_per_day: float = 9.0
+    num_employees: int
+    initial_funds_cents: int
+    initial_prestige_level: float
+    work_hours_per_day: float
 
     # --- Market ---
-    num_market_tasks: int = 500
-    market_browse_default_limit: int = 50
+    num_market_tasks: int
+    market_browse_default_limit: int
 
     # --- Salary bump on task completion ---
-    salary_bump_pct: float = 0.01    # 1% raise per assigned employee per completed task
-    salary_max_cents: int = 10_000_000  # cap individual salary at $100K/month
-    skill_rate_max: float = 30.0  # cap employee skill rate (prevents exponential skill compounding)
+    salary_bump_pct: float
+    salary_max_cents: int
+    skill_rate_max: float
 
     # --- Prestige mechanics ---
-    prestige_max: float = 10.0
-    prestige_min: float = 1.0
-    penalty_fail_multiplier: float = 0.8
-    penalty_cancel_multiplier: float = 1.2
-    # Extra reward fraction per prestige level above 1.
-    # At 0.55: prestige-8 tasks pay ~4.85x more than prestige-1.
-    reward_prestige_scale: float = 0.3
-
-    # Daily prestige decay per domain. Domains not exercised lose prestige
-    # over time: -0.01/day → -0.3/month → untouched domain drops ~1 level
-    # every ~3 months. Floored at prestige_min.
-    prestige_decay_per_day: float = 0.005
+    prestige_max: float
+    prestige_min: float
+    penalty_fail_multiplier: float
+    penalty_cancel_multiplier: float
+    reward_prestige_scale: float
+    prestige_decay_per_day: float
 
     # --- Client trust (intuitive knobs) ---
-    num_clients: int = 8
-    trust_max: float = 5.0
-    # ~how many successful tasks to reach 80% of max trust with one client
-    trust_build_rate: float = 20.0
-    # 0-1: how punishing failures/inactivity are (0=forgiving, 1=harsh)
-    trust_fragility: float = 0.5
-    # 0-1: how much working for one client hurts trust with others (0=none, 1=heavy)
-    trust_focus_pressure: float = 0.5
-    # payout multiplier a typical Premium client (mult≈1.3) gives at max trust
-    trust_reward_ceiling: float = 2.6
-    # max work reduction at max trust (0.4 = 40% less work)
-    trust_work_reduction_max: float = 0.40
-    # fraction of tasks that require trust (~0.2 = 20%)
-    trust_gating_fraction: float = 0.20
+    num_clients: int
+    trust_max: float
+    trust_build_rate: float
+    trust_fragility: float
+    trust_focus_pressure: float
+    trust_reward_ceiling: float
+    trust_work_reduction_max: float
+    trust_gating_fraction: float
 
     # --- Derived trust params (computed from knobs above, do not set directly) ---
     trust_min: float = 0.0
@@ -175,46 +169,25 @@ class WorldConfig(BaseModel):
     client_tier_enterprise_threshold: float = 1.7
     task_specialty_domain_bias: float = 0.7
 
-    # Required qty scaling by prestige: qty *= 1 + prestige_qty_scale * (prestige - 1).
-    # At 0.3: prestige-5 tasks need 2.2× the work of prestige-1 tasks.
-    prestige_qty_scale: float = 0.3
+    # --- Task scaling ---
+    prestige_qty_scale: float
+    deadline_qty_per_day: float
+    deadline_min_biz_days: int
 
-    # --- Deadline computation ---
-    deadline_qty_per_day: float = 150.0  # max per-domain qty / this = deadline days
-    deadline_min_biz_days: int = 7
-
-    # --- Progress milestones (fraction thresholds that trigger checkpoint events) ---
-    task_progress_milestones: list[float] = Field(default_factory=lambda: [0.25, 0.5, 0.75])
+    # --- Progress milestones ---
+    task_progress_milestones: list[float]
 
     # --- Business hours ---
-    workday_start_hour: int = 9
-    workday_end_hour: int = 18
+    workday_start_hour: int
+    workday_end_hour: int
 
-    # --- Distributions (shape of random draws during world generation) ---
+    # --- Distributions ---
     dist: WorldDists = Field(default_factory=WorldDists)
 
     # --- Salary tiers ---
-    salary_junior: SalaryTierConfig = Field(
-        default_factory=lambda: SalaryTierConfig(
-            name="junior", share=0.50,
-            min_cents=200_000, max_cents=400_000,
-            rate_min=1.0, rate_max=4.0,
-        )
-    )
-    salary_mid: SalaryTierConfig = Field(
-        default_factory=lambda: SalaryTierConfig(
-            name="mid", share=0.35,
-            min_cents=600_000, max_cents=800_000,
-            rate_min=4.0, rate_max=7.0,
-        )
-    )
-    salary_senior: SalaryTierConfig = Field(
-        default_factory=lambda: SalaryTierConfig(
-            name="senior", share=0.15,
-            min_cents=1_000_000, max_cents=1_500_000,
-            rate_min=7.0, rate_max=10.0,
-        )
-    )
+    salary_junior: SalaryTierConfig
+    salary_mid: SalaryTierConfig
+    salary_senior: SalaryTierConfig
 
     @model_validator(mode="after")
     def _derive_trust_params(self) -> WorldConfig:
