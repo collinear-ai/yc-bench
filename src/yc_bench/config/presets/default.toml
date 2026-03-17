@@ -138,12 +138,12 @@ high = 10
 mode = 4            # hardened: base default is mode=1
 
 # Base reward paid on task completion, in cents (scaled further by prestige).
-# Mode $14K: prestige-1 tasks burn cash, prestige-3 breaks even, prestige-4+ profits.
+# Mode $7K: prestige-1 tasks burn cash, prestige-4+ profits.
 [world.dist.reward_funds_cents]
 type = "triangular"
-low  = 300_000      # $3,000
-high = 4_000_000    # $40,000
-mode = 1_400_000    # $14,000
+low  = 150_000      # $1,500
+high = 2_000_000    # $20,000
+mode = 700_000      # $7,000
 
 # Number of domains each task requires work in (cast to int after sampling).
 # mode=2: most tasks need 2 domains — single-specialist dominance gone.
