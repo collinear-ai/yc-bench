@@ -20,7 +20,7 @@ def extract_time_series(db_factory, company_id: UUID) -> Dict[str, Any]:
         "tasks": tasks,
         "ledger": ledger,
         "client_trust": client_trust,
-        "trust_reward_formula": "continuous: reward = listed × (0.50 + client_mult² × 0.25 × trust²/5.0); work_reduction = 0.40 × trust/5.0; cross_client_decay = 0.03/task; tiers: Standard=[0.7,1.0), Premium=[1.0,1.7), Enterprise=[1.7,2.5]; specialty_bias=0.70",
+        "trust_reward_formula": "continuous: work_reduction = 0.40 × trust/5.0; cross_client_decay = 0.03/task; tiers: Standard=[0.7,1.0), Premium=[1.0,1.7), Enterprise=[1.7,2.5]; specialty_bias=0.70; RAT clients: scope_creep + payment_disputes above loyalty_reveal_trust",
     }
 
 
@@ -200,6 +200,13 @@ def _extract_client_trust(db, company_id: UUID) -> List[Dict[str, Any]]:
 
     client_names = {str(ct.client_id): name for ct, name in trust_rows}
 
+    # Fetch loyalty scores for post-hoc analysis
+    client_loyalty = {}
+    for ct_row, _ in trust_rows:
+        c = db.query(Client).filter(Client.id == ct_row.client_id).one_or_none()
+        if c:
+            client_loyalty[str(c.id)] = c.loyalty
+
     # Get all tasks that affect trust (completed or failed), ordered by completion time
     tasks = (
         db.query(Task)
@@ -226,6 +233,7 @@ def _extract_client_trust(db, company_id: UUID) -> List[Dict[str, Any]]:
                 "time": first_time.isoformat(),
                 "client_name": name,
                 "trust_level": 0.0,
+                "loyalty": client_loyalty.get(cid, 0.0),
             })
         last_event_time = first_time
 
@@ -254,6 +262,7 @@ def _extract_client_trust(db, company_id: UUID) -> List[Dict[str, Any]]:
             "time": t.completed_at.isoformat(),
             "client_name": client_names[cid],
             "trust_level": round(trust_levels[cid], 4),
+            "loyalty": client_loyalty.get(cid, 0.0),
         })
         last_event_time = t.completed_at
 
@@ -297,6 +306,7 @@ def _extract_tasks(db, company_id: UUID) -> List[Dict[str, Any]]:
             "required_prestige": int(t.required_prestige),
             "required_trust": int(t.required_trust) if t.required_trust else 0,
             "reward_funds_cents": int(t.reward_funds_cents),
+            "advertised_reward_cents": int(t.advertised_reward_cents) if t.advertised_reward_cents else int(t.reward_funds_cents),
             "reward_prestige_delta": float(t.reward_prestige_delta) if t.reward_prestige_delta else 0.0,
             "status": t.status.value if hasattr(t.status, "value") else str(t.status),
             "accepted_at": t.accepted_at.isoformat() if t.accepted_at else None,

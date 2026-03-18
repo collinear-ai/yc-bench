@@ -269,10 +269,33 @@ def run_benchmark(args):
             _write_scratchpad(db_factory, company_id, carried_scratchpad)
             logger.info("Restored scratchpad from episode %d (%d chars).", episode - 1, len(carried_scratchpad))
 
-        # 4. Set up live dashboard
+        # 4. Set up live dashboard + live transcript file
         dashboard = None
         on_turn_start = None
         on_turn = None
+
+        # Write live transcript alongside the DB so the streamlit dashboard can read it
+        _slug = args.model.replace("/", "_")
+        transcript_path = Path("db") / f"{args.config_name}_{args.seed}_{_slug}.transcript.jsonl"
+        if transcript_path.exists():
+            transcript_path.unlink()
+
+        def _write_live_transcript(snapshot, rs, commands):
+            """Append one JSONL line per turn for the streamlit dashboard."""
+            if not rs.transcript:
+                return
+            entry = rs.transcript[-1]
+            import json as _json
+            line = _json.dumps({
+                "turn": entry.turn,
+                "timestamp": entry.timestamp,
+                "agent_output": entry.agent_output,
+                "commands_executed": entry.commands_executed,
+                "sim_time": snapshot.get("sim_time", ""),
+                "funds_cents": snapshot.get("funds_cents", 0),
+            }, separators=(",", ":"))
+            with open(transcript_path, "a") as f:
+                f.write(line + "\n")
 
         if use_live:
             from .dashboard import BenchmarkDashboard
@@ -290,6 +313,10 @@ def run_benchmark(args):
 
             def on_turn(snapshot, rs, commands):
                 dashboard.update(snapshot, rs, commands)
+                _write_live_transcript(snapshot, rs, commands)
+        else:
+            def on_turn(snapshot, rs, commands):
+                _write_live_transcript(snapshot, rs, commands)
 
         # 5. Run agent loop for this episode
         try:

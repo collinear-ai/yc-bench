@@ -19,9 +19,10 @@ from ..db.models.event import EventType, SimEvent
 # Priority ordering — lower number = higher priority
 EVENT_PRIORITY: Dict[EventType, int] = {
     EventType.TASK_COMPLETED: 0,
-    EventType.BANKRUPTCY: 1,
-    EventType.TASK_HALF_PROGRESS: 2,
-    EventType.HORIZON_END: 3,
+    EventType.PAYMENT_DISPUTE: 1,
+    EventType.BANKRUPTCY: 2,
+    EventType.TASK_HALF_PROGRESS: 3,
+    EventType.HORIZON_END: 4,
 }
 
 

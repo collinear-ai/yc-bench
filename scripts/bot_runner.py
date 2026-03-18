@@ -52,7 +52,7 @@ SEEDS = [1, 2, 3]
 # Baseline runs 1 task at a time — simple sequential greedy with no
 # workload management. This is the "zero strategy" floor that any
 # competent LLM agent should beat.
-MAX_CONCURRENT_TASKS = 1
+MAX_CONCURRENT_TASKS = 2
 
 
 @dataclass
@@ -306,7 +306,7 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
             # The LLM spends multiple tool calls to browse/accept/assign/dispatch
             # one task, so it effectively accepts ~1 per turn.
             newly_accepted = []
-            while active_count + len(newly_accepted) < MAX_CONCURRENT_TASKS and len(newly_accepted) < 1:
+            while active_count + len(newly_accepted) < MAX_CONCURRENT_TASKS and len(newly_accepted) < MAX_CONCURRENT_TASKS:
                 employees = db.query(Employee).filter(Employee.company_id == company_id).all()
                 employee_tiers = [emp.tier for emp in employees]
                 employee_ids = [emp.id for emp in employees]
@@ -335,8 +335,9 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                 ).all()
 
                 # Apply trust work reduction (no reward multiplier)
+                trust_level = 0.0
                 if task.client_id is not None:
-                    from yc_bench.db.models.client import ClientTrust
+                    from yc_bench.db.models.client import Client as ClientModel, ClientTrust
                     ct = db.query(ClientTrust).filter(
                         ClientTrust.company_id == company_id,
                         ClientTrust.client_id == task.client_id,
@@ -346,7 +347,21 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                     for r in reqs:
                         r.required_qty = int(float(r.required_qty) * (1 - work_reduction))
 
+                # Compute deadline from advertised qty BEFORE scope creep
                 max_domain_qty = max(float(r.required_qty) for r in reqs)
+
+                # Store advertised reward
+                task.advertised_reward_cents = task.reward_funds_cents
+
+                # Scope creep: RAT clients inflate required_qty after accept
+                if task.client_id is not None:
+                    client_row = db.query(ClientModel).filter(ClientModel.id == task.client_id).one_or_none()
+                    if client_row and client_row.loyalty < -0.3:
+                        intensity = abs(client_row.loyalty)
+                        inflation = world_cfg.scope_creep_max * intensity
+                        for r in reqs:
+                            inflated = float(r.required_qty) * (1 + inflation)
+                            r.required_qty = int(min(25000, max(200, inflated)))
 
                 task.status = TaskStatus.PLANNED
                 task.company_id = company_id

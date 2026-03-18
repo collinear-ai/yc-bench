@@ -8,6 +8,8 @@ in the same directory (e.g. db/medium_1_greedy_bot.db).
 """
 from __future__ import annotations
 
+import json as _json
+import os
 import sys
 import time
 from datetime import datetime, timedelta
@@ -17,7 +19,6 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -28,7 +29,6 @@ from yc_bench.db.models.ledger import LedgerEntry
 from yc_bench.db.models.sim_state import SimState
 from yc_bench.db.models.task import Task, TaskRequirement, TaskStatus
 from yc_bench.db.session import build_engine, build_session_factory, session_scope
-from yc_bench.config import get_world_config
 
 # ---------------------------------------------------------------------------
 # Theme colors
@@ -123,6 +123,13 @@ if not db_file.exists():
     st.error(f"DB not found: {db_file}")
     st.stop()
 
+# Auto-detect config name from DB filename (e.g. "medium_1_model.db" -> "medium")
+_db_stem_parts = db_file.stem.split("_")
+if _db_stem_parts:
+    os.environ.setdefault("YC_BENCH_EXPERIMENT", _db_stem_parts[0])
+
+from yc_bench.config import get_world_config
+
 
 @st.cache_resource
 def get_factory(path: str):
@@ -136,24 +143,42 @@ factory = get_factory(str(db_file))
 # Auto-detect greedy bot baseline DB
 # ---------------------------------------------------------------------------
 
-def _find_baseline_db(primary: Path) -> Path | None:
-    """Look for a greedy_bot DB in the same directory with a matching config/seed prefix."""
-    # e.g. medium_1_gemini_gemini-3-flash-preview.db -> medium_1_greedy_bot.db
+def _find_all_peer_dbs(primary: Path) -> list[tuple[str, Path]]:
+    """Find all DBs with the same config+seed prefix (other models + greedy bot)."""
     parts = primary.stem.split("_")
-    if len(parts) >= 2:
-        prefix = "_".join(parts[:2])  # "medium_1"
-        candidate = primary.parent / f"{prefix}_greedy_bot.db"
-        if candidate.exists() and candidate != primary:
-            return candidate
-    return None
+    if len(parts) < 2:
+        return []
+    prefix = "_".join(parts[:2])  # e.g. "medium_2"
+    peers = []
+    for p in sorted(primary.parent.glob(f"{prefix}_*.db")):
+        if p == primary:
+            continue
+        # Derive a label from the filename
+        model_part = p.stem[len(prefix) + 1:]  # e.g. "greedy_bot" or "openai_gpt-5.2-2025-12-11"
+        label = model_part.replace("_", " ").replace("-", " ")
+        if "greedy" in label:
+            label = "Greedy Bot"
+        else:
+            # Use the model name directly from the filename
+            label = model_part
+        peers.append((label, p))
+    return peers
 
 
-baseline_db = _find_baseline_db(db_file)
-baseline_factory = get_factory(str(baseline_db)) if baseline_db else None
+peer_dbs = _find_all_peer_dbs(db_file)
+peer_factories = [(label, get_factory(str(p))) for label, p in peer_dbs]
+
+# Keep backward compat
+baseline_db = None
+baseline_factory = None
+for label, p in peer_dbs:
+    if "greedy" in p.stem.lower():
+        baseline_db = p
+        baseline_factory = get_factory(str(p))
+        break
 
 
 def query_funds_only(fct):
-    """Extract just (times, vals_dollars) from a DB factory — used for baseline overlay."""
     with session_scope(fct) as db:
         sim = db.query(SimState).first()
         if not sim:
@@ -207,32 +232,8 @@ def _chart_layout(title="", height=400, yaxis_title="", show_legend=True):
     )
 
 
-def _smooth(times, values, window_days=3):
-    """Resample to daily frequency and apply rolling average."""
-    if len(times) < 2:
-        return times, values
-    start, end = times[0], times[-1]
-    n_days = (end - start).days
-    if n_days < 2:
-        return times, values
-    daily_times = [start + timedelta(days=d) for d in range(n_days + 1)]
-    daily_vals = []
-    src_idx = 0
-    for dt in daily_times:
-        while src_idx < len(times) - 1 and times[src_idx + 1] <= dt:
-            src_idx += 1
-        daily_vals.append(values[src_idx])
-    half = window_days // 2
-    smoothed = []
-    for i in range(len(daily_vals)):
-        lo = max(0, i - half)
-        hi = min(len(daily_vals), i + half + 1)
-        smoothed.append(sum(daily_vals[lo:hi]) / (hi - lo))
-    return daily_times, smoothed
-
-
 # ---------------------------------------------------------------------------
-# Query
+# Query DB state
 # ---------------------------------------------------------------------------
 
 def query_state():
@@ -245,7 +246,7 @@ def query_state():
         company = db.query(Company).filter(Company.id == sim.company_id).one()
         company_id = sim.company_id
 
-        # ----- Funds time series -----
+        # Funds time series
         ledger = (
             db.query(LedgerEntry)
             .filter(LedgerEntry.company_id == company_id)
@@ -255,13 +256,14 @@ def query_state():
         total_delta = sum(int(e.amount_cents) for e in ledger)
         initial_funds = int(company.funds_cents) - total_delta
         running = initial_funds
-        funds_times, funds_vals = [], []
+        funds_times, funds_vals, funds_categories = [], [], []
         for e in ledger:
             running += int(e.amount_cents)
             funds_times.append(e.occurred_at)
             funds_vals.append(running / 100)
+            funds_categories.append(e.category.value if hasattr(e.category, "value") else str(e.category))
 
-        # ----- Tasks -----
+        # Tasks
         tasks = db.query(Task).filter(Task.company_id == company_id).all()
         task_counts = {}
         for s in TaskStatus:
@@ -270,7 +272,7 @@ def query_state():
         completed_tasks = [t for t in tasks if t.status == TaskStatus.COMPLETED_SUCCESS]
         total_reward = sum(t.reward_funds_cents for t in completed_tasks)
 
-        # ----- Prestige (current snapshot) -----
+        # Prestige (current snapshot)
         prestige_rows = db.query(CompanyPrestige).filter(
             CompanyPrestige.company_id == company_id
         ).all()
@@ -279,7 +281,7 @@ def query_state():
             for p in prestige_rows
         }
 
-        # ----- Prestige time series -----
+        # Prestige time series
         all_domains = sorted(prestige.keys())
         completed_ordered = (
             db.query(Task)
@@ -331,7 +333,7 @@ def query_state():
                 prestige_series[domain]["levels"].append(round(domain_levels[domain], 4))
             last_event_time = t.completed_at
 
-        # ----- Trust (current snapshot) -----
+        # Trust (current snapshot)
         trust_rows = (
             db.query(ClientTrust, Client.name, Client.tier)
             .join(Client, Client.id == ClientTrust.client_id)
@@ -346,7 +348,7 @@ def query_state():
         client_names = {str(ct.client_id): name for ct, name, _ in trust_rows}
         client_tiers = {str(ct.client_id): tier for ct, _, tier in trust_rows}
 
-        # ----- Trust time series -----
+        # Trust time series
         client_tasks = (
             db.query(Task)
             .filter(
@@ -375,7 +377,7 @@ def query_state():
             if cid not in trust_levels:
                 continue
 
-            if last_trust_time and t.completed_at > last_trust_time:
+            if last_trust_time and t.completed_at and t.completed_at > last_trust_time:
                 days_elapsed = (t.completed_at - last_trust_time).total_seconds() / 86400
                 decay = wc.trust_decay_per_day * days_elapsed
                 for k in trust_levels:
@@ -406,6 +408,7 @@ def query_state():
             "funds_cents": company.funds_cents,
             "funds_times": funds_times,
             "funds_vals": funds_vals,
+            "funds_categories": funds_categories,
             "task_counts": task_counts,
             "total_reward": total_reward,
             "completed": task_counts.get("completed_success", 0),
@@ -424,10 +427,44 @@ def query_state():
 
 
 # ---------------------------------------------------------------------------
-# Layout
+# Load transcript
 # ---------------------------------------------------------------------------
 
-# Header
+def _load_transcript(primary_db: Path) -> list[dict]:
+    """Load live transcript JSONL file, or fall back to result JSON."""
+    transcript_path = primary_db.with_suffix(".transcript.jsonl")
+    if transcript_path.exists():
+        entries = []
+        try:
+            with open(transcript_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        entries.append(_json.loads(line))
+        except Exception:
+            pass
+        if entries:
+            return entries
+
+    # Fall back to result JSON
+    result_path = Path("results") / f"yc_bench_result_{primary_db.stem}.json"
+    if result_path.exists():
+        try:
+            with open(result_path) as f:
+                data = _json.load(f)
+            if "transcript" in data:
+                return data["transcript"]
+            if "episodes" in data and data["episodes"]:
+                return data["episodes"][-1].get("transcript", [])
+        except Exception:
+            pass
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Header + metrics (always visible)
+# ---------------------------------------------------------------------------
+
 st.markdown("""
 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
     <span style="font-size: 1.6rem; font-weight: 700; color: #e0e0e0;">YC-Bench</span>
@@ -447,14 +484,16 @@ if state is None:
 funds = state["funds_cents"] / 100
 funds_color = "green" if funds > 0 else "red"
 runway = round(funds / (state["monthly_payroll"] / 100), 1) if state["monthly_payroll"] > 0 else float("inf")
+max_prestige = max(state["prestige"].values()) if state["prestige"] else 1.0
+avg_prestige = sum(state["prestige"].values()) / len(state["prestige"]) if state["prestige"] else 1.0
 
-cols = st.columns(6)
+cols = st.columns(5)
+tasks_str = f'{state["completed"]}✓ {state["failed"]}✗ {state["active"]}⟳'
 metrics = [
     ("Funds", f"${funds:,.0f}", funds_color),
     ("Sim Date", state["sim_time"].strftime("%b %d, %Y"), "blue"),
-    ("Completed", str(state["completed"]), "green"),
-    ("Failed", str(state["failed"]), "red" if state["failed"] > 0 else "yellow"),
-    ("Active", str(state["active"]), "purple"),
+    ("Prestige", f"{max_prestige:.1f}", "purple"),
+    ("Tasks", tasks_str, "green"),
     ("Runway", f"{runway:.0f}mo" if runway != float("inf") else "N/A", "yellow"),
 ]
 
@@ -468,178 +507,718 @@ for col, (label, value, color) in zip(cols, metrics):
 
 st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Funds chart
-# ---------------------------------------------------------------------------
 
-if state["funds_times"]:
-    st.markdown('<div class="section-header">Funds Over Time</div>', unsafe_allow_html=True)
+# ===========================================================================
+# TABS
+# ===========================================================================
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=state["funds_times"], y=state["funds_vals"],
-        mode="lines", name="LLM Agent",
-        line=dict(color=ACCENT_GREEN, width=2),
-        fill="tozeroy", fillcolor="rgba(0,212,170,0.08)",
-    ))
-    # Overlay greedy baseline if available
-    if baseline_factory is not None:
-        bl_times, bl_vals = query_funds_only(baseline_factory)
-        if bl_times:
-            fig.add_trace(go.Scatter(
-                x=bl_times, y=bl_vals,
-                mode="lines", name="Greedy Bot",
-                line=dict(color=ACCENT_RED, width=2, dash="dot"),
-            ))
-            # Mark bankruptcy point
-            if bl_vals[-1] < 0:
-                fig.add_trace(go.Scatter(
-                    x=[bl_times[-1]], y=[bl_vals[-1]],
-                    mode="markers+text", name="Bankrupt",
-                    marker=dict(color=ACCENT_RED, size=10, symbol="x"),
-                    text=["BANKRUPT"], textposition="top center",
-                    textfont=dict(color=ACCENT_RED, size=10),
-                    showlegend=False,
-                ))
-    # Zero line
-    fig.add_hline(y=0, line_dash="dash", line_color=ACCENT_RED, opacity=0.3)
-    show_legend = baseline_factory is not None
-    fig.update_layout(**_chart_layout(yaxis_title="USD ($)", show_legend=show_legend))
-    fig.update_yaxes(tickprefix="$", tickformat=",")
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+tab_charts, tab_world = st.tabs(["Charts", "World"])
 
 # ---------------------------------------------------------------------------
-# Prestige & Trust side by side
+# TAB 1: Charts
 # ---------------------------------------------------------------------------
 
-col_left, col_right = st.columns(2)
+with tab_charts:
 
-with col_left:
-    st.markdown('<div class="section-header">Prestige by Domain</div>', unsafe_allow_html=True)
+    # Funds chart
+    if state["funds_times"]:
+        st.markdown('<div class="section-header">Funds Over Time</div>', unsafe_allow_html=True)
 
-    has_series = any(len(s["times"]) > 0 for s in state["prestige_series"].values())
-    if has_series:
         fig = go.Figure()
-        for i, (domain, series) in enumerate(sorted(state["prestige_series"].items())):
-            if not series["times"]:
-                continue
-            fig.add_trace(go.Scatter(
-                x=series["times"], y=series["levels"],
-                mode="lines+markers", name=domain.replace("_", " ").title(),
-                line=dict(color=CHART_COLORS[i % len(CHART_COLORS)], width=2),
-                marker=dict(size=3),
-            ))
-        layout = _chart_layout(yaxis_title="Prestige Level", height=350)
-        layout["yaxis"]["range"] = [0.5, 10.5]
-        fig.update_layout(**layout)
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    elif state["prestige"]:
-        domains = sorted(state["prestige"].keys())
-        levels = [state["prestige"][d] for d in domains]
-        labels = [d.replace("_", " ").title() for d in domains]
-        fig = go.Figure(go.Bar(
-            x=labels, y=levels,
-            marker_color=[CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(domains))],
-            marker_line=dict(width=0),
+        fig.add_trace(go.Scatter(
+            x=state["funds_times"], y=state["funds_vals"],
+            mode="lines", name="_".join(db_file.stem.split("_")[2:]),
+            line=dict(color=ACCENT_GREEN, width=2),
+            fill="tozeroy", fillcolor="rgba(0,212,170,0.08)",
         ))
-        layout = _chart_layout(yaxis_title="Level", height=350, show_legend=False)
-        layout["yaxis"]["range"] = [0, 10.5]
-        fig.update_layout(**layout)
+        # Overlay all peer runs (other models + greedy bot)
+        peer_colors = [ACCENT_RED, ACCENT_BLUE, ACCENT_YELLOW, ACCENT_PURPLE, ACCENT_ORANGE]
+        for i, (peer_label, peer_fct) in enumerate(peer_factories):
+            pl_times, pl_vals = query_funds_only(peer_fct)
+            if pl_times:
+                is_bot = "greedy" in peer_label.lower() or "bot" in peer_label.lower()
+                fig.add_trace(go.Scatter(
+                    x=pl_times, y=pl_vals,
+                    mode="lines", name=peer_label,
+                    line=dict(color=peer_colors[i % len(peer_colors)], width=2, dash="dot" if is_bot else "solid"),
+                ))
+                if pl_vals[-1] < 0:
+                    fig.add_trace(go.Scatter(
+                        x=[pl_times[-1]], y=[pl_vals[-1]],
+                        mode="markers+text", name=f"{peer_label} Bankrupt",
+                        marker=dict(color=peer_colors[i % len(peer_colors)], size=10, symbol="x"),
+                        text=["BANKRUPT"], textposition="top center",
+                        textfont=dict(color=peer_colors[i % len(peer_colors)], size=10),
+                        showlegend=False,
+                    ))
+        # Annotate dips — group payroll by month, always show disputes
+        if len(state["funds_times"]) > 1:
+            cats = state.get("funds_categories", [])
+
+            # Group payroll into monthly totals
+            payroll_months = {}  # "YYYY-MM" -> {"total": int, "time": datetime, "val": float}
+            disputes_list = []
+
+            for i in range(1, len(state["funds_vals"])):
+                delta = state["funds_vals"][i] - state["funds_vals"][i - 1]
+                t = state["funds_times"][i]
+                v = state["funds_vals"][i]
+                cat = cats[i] if i < len(cats) else ""
+
+                if cat == "payment_dispute":
+                    disputes_list.append((t, v, delta))
+                elif cat == "monthly_payroll" and delta < 0:
+                    key = t.strftime("%Y-%m")
+                    if key not in payroll_months:
+                        payroll_months[key] = {"total": 0, "time": t, "val": v}
+                    payroll_months[key]["total"] += delta
+                    payroll_months[key]["val"] = v  # use final value after all deductions
+
+            ay_flip = -1
+            for t, v, delta in disputes_list:
+                ay_flip *= -1
+                fig.add_annotation(
+                    x=t, y=v, text=f"Dispute -${abs(delta):,.0f}",
+                    showarrow=True, arrowhead=2, arrowsize=0.8, arrowcolor=ACCENT_RED,
+                    font=dict(size=9, color=ACCENT_RED), bgcolor="#1a1d23", bordercolor=ACCENT_RED,
+                    borderwidth=1, borderpad=3, ax=0, ay=ay_flip * 35,
+                )
+
+            for key, pm in payroll_months.items():
+                fig.add_annotation(
+                    x=pm["time"], y=pm["val"], text=f"Payroll -${abs(pm['total']):,.0f}",
+                    showarrow=False,
+                    font=dict(size=8, color=TEXT_MUTED), yshift=-14,
+                )
+
+        fig.add_hline(y=0, line_dash="dash", line_color=ACCENT_RED, opacity=0.3)
+        show_legend = len(peer_factories) > 0
+        fig.update_layout(**_chart_layout(yaxis_title="USD ($)", show_legend=show_legend))
+        fig.update_yaxes(tickprefix="$", tickformat=",")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-with col_right:
-    st.markdown('<div class="section-header">Client Trust</div>', unsafe_allow_html=True)
+    # Prestige & Trust side by side
+    col_left, col_right = st.columns(2)
 
-    has_trust_series = any(len(s["times"]) > 0 for s in state["trust_series"].values())
-    if has_trust_series:
-        fig = go.Figure()
-        # Sort clients by final trust level (highest first)
-        sorted_clients = sorted(
-            state["trust_series"].items(),
-            key=lambda x: x[1]["levels"][-1] if x[1]["levels"] else 0,
-            reverse=True,
-        )
-        for i, (client, series) in enumerate(sorted_clients):
-            if not series["times"]:
-                continue
-            tier = None
-            for cid, name in state["client_names"].items():
-                if name == client:
-                    tier = state["client_tiers"].get(cid)
-                    break
-            label = f"{client} [{tier}]" if tier else client
-            fig.add_trace(go.Scatter(
-                x=series["times"], y=series["levels"],
-                mode="lines", name=label,
-                line=dict(color=CHART_COLORS[i % len(CHART_COLORS)], width=2),
+    with col_left:
+        st.markdown('<div class="section-header">Prestige by Domain</div>', unsafe_allow_html=True)
+
+        has_series = any(len(s["times"]) > 0 for s in state["prestige_series"].values())
+        if has_series:
+            fig = go.Figure()
+            for i, (domain, series) in enumerate(sorted(state["prestige_series"].items())):
+                if not series["times"]:
+                    continue
+                fig.add_trace(go.Scatter(
+                    x=series["times"], y=series["levels"],
+                    mode="lines+markers", name=domain.replace("_", " ").title(),
+                    line=dict(color=CHART_COLORS[i % len(CHART_COLORS)], width=2),
+                    marker=dict(size=3),
+                ))
+            layout = _chart_layout(yaxis_title="Prestige Level", height=350)
+            layout["yaxis"]["range"] = [0.5, 10.5]
+            fig.update_layout(**layout)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        elif state["prestige"]:
+            domains = sorted(state["prestige"].keys())
+            levels = [state["prestige"][d] for d in domains]
+            labels = [d.replace("_", " ").title() for d in domains]
+            fig = go.Figure(go.Bar(
+                x=labels, y=levels,
+                marker_color=[CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(domains))],
+                marker_line=dict(width=0),
             ))
-        layout = _chart_layout(yaxis_title="Trust Level", height=350)
-        layout["yaxis"]["range"] = [-0.2, 5.5]
-        fig.update_layout(**layout)
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    elif state["trusts"]:
+            layout = _chart_layout(yaxis_title="Level", height=350, show_legend=False)
+            layout["yaxis"]["range"] = [0, 10.5]
+            fig.update_layout(**layout)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    with col_right:
+        st.markdown('<div class="section-header">Client Trust</div>', unsafe_allow_html=True)
+
+        has_trust_series = any(len(s["times"]) > 0 for s in state["trust_series"].values())
+        if has_trust_series:
+            fig = go.Figure()
+            sorted_clients = sorted(
+                state["trust_series"].items(),
+                key=lambda x: x[1]["levels"][-1] if x[1]["levels"] else 0,
+                reverse=True,
+            )
+            for i, (client, series) in enumerate(sorted_clients):
+                if not series["times"]:
+                    continue
+                tier = None
+                for cid, name in state["client_names"].items():
+                    if name == client:
+                        tier = state["client_tiers"].get(cid)
+                        break
+                label = f"{client} [{tier}]" if tier else client
+                fig.add_trace(go.Scatter(
+                    x=series["times"], y=series["levels"],
+                    mode="lines", name=label,
+                    line=dict(color=CHART_COLORS[i % len(CHART_COLORS)], width=2),
+                ))
+            layout = _chart_layout(yaxis_title="Trust Level", height=350)
+            layout["yaxis"]["range"] = [-0.2, 5.5]
+            fig.update_layout(**layout)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        elif state["trusts"]:
+            df_t = pd.DataFrame(state["trusts"])
+            df_t["label"] = df_t.apply(lambda r: f"{r['client']} [{r['tier']}]", axis=1)
+            df_t = df_t.sort_values("trust", ascending=True)
+            fig = go.Figure(go.Bar(
+                x=df_t["trust"], y=df_t["label"],
+                orientation="h",
+                marker_color=ACCENT_BLUE,
+                marker_line=dict(width=0),
+            ))
+            layout = _chart_layout(height=350, show_legend=False)
+            layout["xaxis"]["range"] = [0, 5.5]
+            layout["xaxis"]["title"] = "Trust Level"
+            layout["margin"]["l"] = 140
+            fig.update_layout(**layout)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # Current trust snapshot
+    if state["trusts"]:
+        st.markdown('<div class="section-header">Current Trust Snapshot</div>', unsafe_allow_html=True)
         df_t = pd.DataFrame(state["trusts"])
         df_t["label"] = df_t.apply(lambda r: f"{r['client']} [{r['tier']}]", axis=1)
         df_t = df_t.sort_values("trust", ascending=True)
+
+        colors = []
+        for _, row in df_t.iterrows():
+            t = row["trust"]
+            if t >= 3.0:
+                colors.append(ACCENT_GREEN)
+            elif t >= 1.0:
+                colors.append(ACCENT_BLUE)
+            elif t > 0:
+                colors.append(ACCENT_YELLOW)
+            else:
+                colors.append(GRID_COLOR)
+
         fig = go.Figure(go.Bar(
             x=df_t["trust"], y=df_t["label"],
             orientation="h",
-            marker_color=ACCENT_BLUE,
+            marker_color=colors,
             marker_line=dict(width=0),
+            text=[f"{t:.2f}" for t in df_t["trust"]],
+            textposition="outside",
+            textfont=dict(size=11, color=TEXT_MUTED),
         ))
-        layout = _chart_layout(height=350, show_legend=False)
+        layout = _chart_layout(height=max(200, len(df_t) * 35 + 60), show_legend=False)
         layout["xaxis"]["range"] = [0, 5.5]
         layout["xaxis"]["title"] = "Trust Level"
-        layout["margin"]["l"] = 140
+        layout["margin"]["l"] = 160
         fig.update_layout(**layout)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-# ---------------------------------------------------------------------------
-# Current trust snapshot (horizontal bar)
-# ---------------------------------------------------------------------------
-
-if state["trusts"]:
-    st.markdown('<div class="section-header">Current Trust Snapshot</div>', unsafe_allow_html=True)
-    df_t = pd.DataFrame(state["trusts"])
-    df_t["label"] = df_t.apply(lambda r: f"{r['client']} [{r['tier']}]", axis=1)
-    df_t = df_t.sort_values("trust", ascending=True)
-
-    colors = []
-    for _, row in df_t.iterrows():
-        t = row["trust"]
-        if t >= 3.0:
-            colors.append(ACCENT_GREEN)
-        elif t >= 1.0:
-            colors.append(ACCENT_BLUE)
-        elif t > 0:
-            colors.append(ACCENT_YELLOW)
-        else:
-            colors.append(GRID_COLOR)
-
-    fig = go.Figure(go.Bar(
-        x=df_t["trust"], y=df_t["label"],
-        orientation="h",
-        marker_color=colors,
-        marker_line=dict(width=0),
-        text=[f"{t:.2f}" for t in df_t["trust"]],
-        textposition="outside",
-        textfont=dict(size=11, color=TEXT_MUTED),
-    ))
-    layout = _chart_layout(height=max(200, len(df_t) * 35 + 60), show_legend=False)
-    layout["xaxis"]["range"] = [0, 5.5]
-    layout["xaxis"]["title"] = "Trust Level"
-    layout["margin"]["l"] = 160
-    fig.update_layout(**layout)
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+def _esc(s: str) -> str:
+    """Escape HTML."""
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 # ---------------------------------------------------------------------------
+# TAB 2: World State — god mode view
+# ---------------------------------------------------------------------------
+
+def query_world():
+    """Query full world state including hidden info."""
+    wc = get_world_config()
+    with session_scope(factory) as db:
+        sim = db.query(SimState).first()
+        if not sim:
+            return None
+        company_id = sim.company_id
+
+        from yc_bench.db.models.task import TaskAssignment
+        from yc_bench.db.models.employee import EmployeeSkillRate
+        from yc_bench.db.models.ledger import LedgerCategory
+        from sqlalchemy import func as sqlfunc
+
+        # ── Employees ──
+        employees = db.query(Employee).filter(Employee.company_id == company_id).order_by(Employee.name).all()
+        emp_data = []
+        for emp in employees:
+            assignments = (
+                db.query(TaskAssignment, Task)
+                .join(Task, Task.id == TaskAssignment.task_id)
+                .filter(TaskAssignment.employee_id == emp.id, Task.status.in_([TaskStatus.PLANNED, TaskStatus.ACTIVE]))
+                .all()
+            )
+            tasks_assigned = [{"title": t.title, "status": t.status.value} for _, t in assignments]
+            skills = db.query(EmployeeSkillRate).filter(EmployeeSkillRate.employee_id == emp.id).all()
+            skill_map = {
+                (s.domain.value if hasattr(s.domain, "value") else str(s.domain)): round(float(s.rate_domain_per_hour), 2)
+                for s in skills
+            }
+            # Count completed tasks for this employee
+            completed_n = (
+                db.query(sqlfunc.count(TaskAssignment.task_id))
+                .join(Task, Task.id == TaskAssignment.task_id)
+                .filter(TaskAssignment.employee_id == emp.id, Task.status == TaskStatus.COMPLETED_SUCCESS)
+                .scalar() or 0
+            )
+            emp_data.append({
+                "name": emp.name, "tier": emp.tier,
+                "salary_cents": emp.salary_cents, "skills": skill_map,
+                "tasks": tasks_assigned, "completed": completed_n,
+                "hours_per_day": float(emp.work_hours_per_day),
+            })
+
+        # ── Clients (with hidden loyalty) ──
+        clients_raw = (
+            db.query(Client, ClientTrust)
+            .join(ClientTrust, ClientTrust.client_id == Client.id)
+            .filter(ClientTrust.company_id == company_id)
+            .order_by(Client.name)
+            .all()
+        )
+        client_data = []
+        for c, ct in clients_raw:
+            success_n = db.query(sqlfunc.count(Task.id)).filter(
+                Task.company_id == company_id, Task.client_id == c.id, Task.status == TaskStatus.COMPLETED_SUCCESS).scalar() or 0
+            fail_n = db.query(sqlfunc.count(Task.id)).filter(
+                Task.company_id == company_id, Task.client_id == c.id, Task.status == TaskStatus.COMPLETED_FAIL).scalar() or 0
+            active_n = db.query(sqlfunc.count(Task.id)).filter(
+                Task.company_id == company_id, Task.client_id == c.id, Task.status == TaskStatus.ACTIVE).scalar() or 0
+
+            # Dispute stats (hidden info)
+            completed_tasks = db.query(Task).filter(
+                Task.company_id == company_id, Task.client_id == c.id, Task.status == TaskStatus.COMPLETED_SUCCESS).all()
+            task_ids = [t.id for t in completed_tasks]
+            dispute_n = 0
+            dispute_total = 0
+            listed_total = sum((t.advertised_reward_cents or t.reward_funds_cents) for t in completed_tasks)
+            received_total = 0
+            if task_ids:
+                from yc_bench.db.models.ledger import LedgerEntry
+                reward_sum = db.query(sqlfunc.sum(LedgerEntry.amount_cents)).filter(
+                    LedgerEntry.company_id == company_id, LedgerEntry.category == LedgerCategory.TASK_REWARD,
+                    LedgerEntry.ref_id.in_(task_ids)).scalar()
+                received_total = int(reward_sum) if reward_sum else 0
+                dispute_entries = db.query(LedgerEntry).filter(
+                    LedgerEntry.company_id == company_id, LedgerEntry.category == LedgerCategory.PAYMENT_DISPUTE,
+                    LedgerEntry.ref_id.in_(task_ids)).all()
+                dispute_n = len(dispute_entries)
+                dispute_total = sum(abs(int(e.amount_cents)) for e in dispute_entries)
+
+            # Hidden mechanics — what would happen at current trust
+            trust_val = float(ct.trust_level)
+            loyalty_class = "RAT" if c.loyalty < -0.3 else ("LOYAL" if c.loyalty > 0.3 else "NEUTRAL")
+            effects_active = loyalty_class == "RAT"
+            scope_creep_pct = 0.0
+            dispute_prob = 0.0
+            if effects_active:
+                intensity = abs(c.loyalty)
+                scope_creep_pct = wc.scope_creep_max * intensity * 100
+                dispute_prob = wc.dispute_prob_max * intensity * 100
+
+            client_data.append({
+                "name": c.name, "tier": c.tier, "trust": trust_val,
+                "specialties": c.specialty_domains or [],
+                "reward_mult": c.reward_multiplier,
+                "loyalty": c.loyalty, "loyalty_class": loyalty_class,
+                "active": active_n, "completed": success_n, "failed": fail_n,
+                "listed_total": listed_total, "received_total": received_total,
+                "dispute_n": dispute_n, "dispute_total": dispute_total,
+                "effects_active": effects_active,
+                "scope_creep_pct": scope_creep_pct, "dispute_prob": dispute_prob,
+            })
+
+        # ── Active tasks ──
+        active_tasks = db.query(Task).filter(
+            Task.company_id == company_id, Task.status.in_([TaskStatus.ACTIVE, TaskStatus.PLANNED])
+        ).order_by(Task.accepted_at).all()
+        task_data = []
+        for t in active_tasks:
+            reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == t.id).all()
+            assigns = db.query(TaskAssignment).filter(TaskAssignment.task_id == t.id).all()
+            emp_names = []
+            for a in assigns:
+                e = db.query(Employee).filter(Employee.id == a.employee_id).one_or_none()
+                if e: emp_names.append(e.name)
+            total_req = sum(float(r.required_qty) for r in reqs)
+            total_done = sum(float(r.completed_qty) for r in reqs)
+            pct = (total_done / total_req * 100) if total_req > 0 else 0
+            domains = [{
+                "domain": r.domain.value if hasattr(r.domain, "value") else str(r.domain),
+                "done": int(r.completed_qty), "total": int(r.required_qty),
+                "pct": int(float(r.completed_qty) / float(r.required_qty) * 100) if float(r.required_qty) > 0 else 0,
+            } for r in reqs]
+            client_name = ""
+            client_loyalty_class = ""
+            if t.client_id:
+                cl = db.query(Client).filter(Client.id == t.client_id).one_or_none()
+                if cl:
+                    client_name = cl.name
+                    client_loyalty_class = "RAT" if cl.loyalty < -0.3 else ("LOYAL" if cl.loyalty > 0.3 else "NEUTRAL")
+            # Scope creep detection: compare advertised vs actual reward
+            was_scope_creeped = False
+            if t.advertised_reward_cents and t.advertised_reward_cents != t.reward_funds_cents:
+                was_scope_creeped = True
+
+            task_data.append({
+                "title": t.title, "client": client_name,
+                "client_loyalty": client_loyalty_class,
+                "status": t.status.value, "reward": t.reward_funds_cents,
+                "advertised_reward": t.advertised_reward_cents or t.reward_funds_cents,
+                "prestige_req": t.required_prestige,
+                "prestige_delta": float(t.reward_prestige_delta) if t.reward_prestige_delta else 0.0,
+                "skill_boost_pct": float(t.skill_boost_pct) if t.skill_boost_pct else 0.0,
+                "trust_req": int(t.required_trust) if t.required_trust else 0,
+                "progress_pct": pct,
+                "deadline": t.deadline,
+                "at_risk": t.deadline and t.status == TaskStatus.ACTIVE and sim.sim_time > t.deadline,
+                "domains": domains, "employees": emp_names,
+                "was_scope_creeped": was_scope_creeped,
+            })
+
+        # ── Recent completed ──
+        recent = db.query(Task).filter(
+            Task.company_id == company_id,
+            Task.status.in_([TaskStatus.COMPLETED_SUCCESS, TaskStatus.COMPLETED_FAIL])
+        ).order_by(Task.completed_at.desc()).limit(10).all()
+        recent_data = []
+        for t in recent:
+            cn = ""
+            if t.client_id:
+                cl = db.query(Client).filter(Client.id == t.client_id).one_or_none()
+                if cl: cn = cl.name
+            recent_data.append({
+                "title": t.title, "client": cn,
+                "success": t.success, "reward": t.reward_funds_cents,
+                "completed_at": t.completed_at,
+            })
+
+        # ── Trust effects log ──
+        from yc_bench.db.models.ledger import LedgerEntry
+        from yc_bench.db.models.event import SimEvent, EventType
+
+        # Payment disputes
+        dispute_entries = (
+            db.query(LedgerEntry)
+            .filter(LedgerEntry.company_id == company_id, LedgerEntry.category == LedgerCategory.PAYMENT_DISPUTE)
+            .order_by(LedgerEntry.occurred_at.desc())
+            .all()
+        )
+        disputes = []
+        for d in dispute_entries:
+            # Find the task and client
+            task_row = db.query(Task).filter(Task.id == d.ref_id).one_or_none()
+            cn = ""
+            if task_row and task_row.client_id:
+                cl = db.query(Client).filter(Client.id == task_row.client_id).one_or_none()
+                if cl: cn = cl.name
+            disputes.append({
+                "date": d.occurred_at, "amount": abs(int(d.amount_cents)),
+                "client": cn, "task": task_row.title if task_row else "?",
+            })
+
+        # Scope-creeped tasks (advertised != actual reward or we detect it from task data)
+        all_company_tasks = db.query(Task).filter(
+            Task.company_id == company_id,
+            Task.advertised_reward_cents.isnot(None),
+        ).order_by(Task.accepted_at).all()
+        scope_creeps = []
+        for t in all_company_tasks:
+            # We stored advertised_reward = reward at accept time, so they're equal
+            # Scope creep inflates required_qty but keeps deadline based on original qty
+            # We can detect it by checking if the client is a RAT and trust was above threshold
+            if t.client_id:
+                cl = db.query(Client).filter(Client.id == t.client_id).one_or_none()
+                if cl and cl.loyalty < -0.3:
+                    ct_row = db.query(ClientTrust).filter(
+                        ClientTrust.company_id == company_id, ClientTrust.client_id == t.client_id
+                    ).one_or_none()
+                    # Check if this task was accepted when trust > threshold
+                    # We can't know exact trust at accept time, but if task failed deadline it's a hint
+                    # For god-mode, just flag all tasks from RAT clients
+                    scope_creeps.append({
+                        "title": t.title, "client": cl.name,
+                        "accepted": t.accepted_at,
+                        "status": t.status.value if hasattr(t.status, "value") else str(t.status),
+                        "failed_deadline": t.status == TaskStatus.COMPLETED_FAIL,
+                    })
+
+        # Work reduction stats: count tasks from loyal clients
+        loyal_tasks_completed = 0
+        rat_tasks_completed = 0
+        for t in all_company_tasks:
+            if t.status != TaskStatus.COMPLETED_SUCCESS:
+                continue
+            if t.client_id:
+                cl = db.query(Client).filter(Client.id == t.client_id).one_or_none()
+                if cl:
+                    if cl.loyalty > 0.3: loyal_tasks_completed += 1
+                    elif cl.loyalty < -0.3: rat_tasks_completed += 1
+
+        # Pending dispute events
+        pending_disputes = db.query(SimEvent).filter(
+            SimEvent.company_id == company_id,
+            SimEvent.event_type == EventType.PAYMENT_DISPUTE,
+            SimEvent.consumed == False,
+        ).count()
+
+        trust_effects = {
+            "disputes": disputes,
+            "total_disputed": sum(d["amount"] for d in disputes),
+            "scope_creeps": scope_creeps,
+            "scope_creep_fails": sum(1 for s in scope_creeps if s["failed_deadline"]),
+            "loyal_completed": loyal_tasks_completed,
+            "rat_completed": rat_tasks_completed,
+            "pending_disputes": pending_disputes,
+        }
+
+        # ── Market overview ──
+        from collections import defaultdict
+        market_tasks = db.query(Task).filter(Task.status == TaskStatus.MARKET).all()
+        market_by_prestige = defaultdict(lambda: {"count": 0, "total_reward": 0})
+        for t in market_tasks:
+            market_by_prestige[t.required_prestige]["count"] += 1
+            market_by_prestige[t.required_prestige]["total_reward"] += t.reward_funds_cents
+        market_overview = []
+        for p in sorted(market_by_prestige):
+            d = market_by_prestige[p]
+            avg = d["total_reward"] / d["count"] if d["count"] else 0
+            market_overview.append({"prestige": p, "count": d["count"], "avg_reward": avg})
+
+        return {"employees": emp_data, "clients": client_data, "active_tasks": task_data,
+                "recent": recent_data, "sim_time": sim.sim_time, "wc": wc,
+                "trust_effects": trust_effects, "market": market_overview}
+
+
+with tab_world:
+    world = query_world()
+    if world is None:
+        st.warning("No simulation data.")
+    else:
+        god_mode = True  # always on
+
+        # ── Legend ──
+        st.markdown("""
+        <div style="padding:10px 14px;background:#14161a;border-radius:8px;border:1px solid #2a2d3544;
+                    margin-bottom:12px;font-size:0.72rem;color:#8b8d93;line-height:1.8;">
+            <table style="width:100%;border-collapse:collapse;">
+                <tr>
+                    <td style="vertical-align:top;padding-right:24px;white-space:nowrap;">
+                        <b style="color:#e0e0e0;font-size:0.75rem;">Tasks</b><br>
+                        🔵 = in progress, ⏳ = planned (not started)<br>
+                        Each domain shows a progress bar: <b style="color:#e0e0e0;">done / required units</b><br>
+                        <span style="color:#ff4b6e;">⚠ OVERDUE</span> = deadline has passed<br>
+                        <span style="color:#ff4b6e;">🐀 RAT</span> = client is adversarial<br>
+                        <span style="color:#ff8c42;">📈 CREEP</span> = work was secretly inflated
+                    </td>
+                    <td style="vertical-align:top;padding-right:24px;white-space:nowrap;">
+                        <b style="color:#e0e0e0;font-size:0.75rem;">Employees</b><br>
+                        Skill bars = work rate per domain (0-10, higher = faster)<br>
+                        <span style="color:#4da6ff;">JUNIOR</span> low pay, low skills ·
+                        <span style="color:#ffd43b;">MID</span> ·
+                        <span style="color:#b197fc;">SENIOR</span> high pay, high skills<br>
+                        <span style="color:#ff4b6e;">IDLE</span> = not assigned to any task (wasting salary)
+                    </td>
+                    <td style="vertical-align:top;white-space:nowrap;">
+                        <b style="color:#e0e0e0;font-size:0.75rem;">Clients</b><br>
+                        <b style="color:#e0e0e0;">Trust</b> 0-5: builds with completed tasks, decays over time<br>
+                        <b style="color:#e0e0e0;">Multiplier</b>: hidden reward scaling (agent can't see)<br>
+                        <span style="color:#ff4b6e;">🐀 RAT</span> = scope creep + payment disputes at high trust<br>
+                        <span style="color:#00d4aa;">✦ LOYAL</span> = work reduction at high trust<br>
+                        <b style="color:#e0e0e0;">Listed vs Net</b> = reward promised vs actually received<br>
+                        ✓ completed · ✗ failed · ⟳ in progress
+                    </td>
+                </tr>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ════════════ TWO-COLUMN GRID: Left = Tasks+Employees, Right = Clients ════════════
+        col_left, col_right = st.columns([3, 2])
+
+        # ── LEFT COLUMN: Active Tasks + Employees ──
+        with col_left:
+            st.markdown('<div class="section-header">Active Tasks</div>', unsafe_allow_html=True)
+            if not world["active_tasks"]:
+                st.markdown('<div style="color:#8b8d93; padding:8px;">No active tasks.</div>', unsafe_allow_html=True)
+
+            for t in world["active_tasks"]:
+                rw = f"${t['reward']/100:,.0f}"
+                dl = t["deadline"].strftime("%b %d") if t["deadline"] else "—"
+                sc = ACCENT_PURPLE if t["status"] == "active" else ACCENT_YELLOW
+                icon = "🔵" if t["status"] == "active" else "⏳"
+                pct = t["progress_pct"]
+                bc = ACCENT_GREEN if pct >= 100 else (ACCENT_RED if t["at_risk"] else ACCENT_BLUE)
+                risk = f'<span style="color:{ACCENT_RED};font-weight:700;"> ⚠ OVERDUE</span>' if t["at_risk"] else ""
+
+                hidden = ""
+                if god_mode:
+                    if t.get("client_loyalty") == "RAT":
+                        hidden += '<span style="background:#ff4b6e22;color:#ff4b6e;padding:1px 5px;border-radius:3px;font-size:0.6rem;font-weight:700;margin-left:3px;">🐀 RAT</span>'
+                    if t.get("was_scope_creeped"):
+                        hidden += '<span style="background:#ff8c4222;color:#ff8c42;padding:1px 5px;border-radius:3px;font-size:0.6rem;font-weight:700;margin-left:3px;">📈 CREEP</span>'
+
+                dom_pills = ""
+                for d in t["domains"]:
+                    dp = d["pct"]; dc = ACCENT_GREEN if dp >= 100 else ACCENT_BLUE
+                    w = min(dp, 100)
+                    dom_pills += (
+                        f'<div style="display:inline-flex;align-items:center;gap:6px;background:#1a1d23;border:1px solid #2a2d35;'
+                        f'padding:4px 10px;border-radius:6px;margin:2px 4px 2px 0;font-size:0.78rem;">'
+                        f'<span style="color:#e0e0e0;font-weight:600;">{d["domain"]}</span>'
+                        f'<div style="background:#2a2d35;border-radius:3px;width:60px;height:7px;">'
+                        f'<div style="background:{dc};width:{w}%;height:100%;border-radius:3px;"></div></div>'
+                        f'<span style="color:#e0e0e0;">{d["done"]:,}/{d["total"]:,}</span>'
+                        f'</div>')
+
+                emps = ", ".join(t["employees"][:5]) if t["employees"] else f'<span style="color:{ACCENT_RED};">none</span>'
+
+                trust_req_html = f'<span>Trust req: <b style="color:#ffd43b;">{t["trust_req"]}</b></span>' if t["trust_req"] else ''
+                st.markdown(
+                    f'<div style="border:1px solid {sc}33;border-radius:8px;padding:10px 12px;margin:5px 0;background:#14161a;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+                    f'<span>{icon} <b style="color:#e0e0e0;font-size:0.85rem;">{_esc(t["title"])}</b> {risk}{hidden}</span>'
+                    f'<span style="color:#00d4aa;font-weight:700;">{rw}</span></div>'
+                    f'<div style="display:flex;flex-wrap:wrap;gap:10px;color:#8b8d93;font-size:0.72rem;margin-bottom:4px;">'
+                    f'<span>Client: <b style="color:#e0e0e0;">{_esc(t["client"]) or "—"}</b></span>'
+                    f'<span>Min prestige: <b style="color:#e0e0e0;">{t["prestige_req"]}</b></span>'
+                    f'<span>Deadline: <b style="color:#e0e0e0;">{dl}</b></span>'
+                    f'<span>Prestige reward: <b style="color:#e0e0e0;">+{t["prestige_delta"]:.2f}</b></span>'
+                    f'<span>Skill boost: <b style="color:#e0e0e0;">{t["skill_boost_pct"]*100:.1f}%</b></span>'
+                    f'{trust_req_html}</div></div>',
+                    unsafe_allow_html=True,
+                )
+                # Domains + employees in separate markdown call to avoid HTML length issues
+                st.markdown(
+                    f'<div style="padding:0 12px 10px 12px;margin-top:-8px;background:#14161a;'
+                    f'border:1px solid {sc}33;border-top:none;border-radius:0 0 8px 8px;">'
+                    f'{dom_pills}'
+                    f'<div style="color:#8b8d93;font-size:0.7rem;margin-top:4px;">👥 {emps}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+            # ── EMPLOYEES (compact grid — 2 per row) ──
+            st.markdown('<div class="section-header">Employees</div>', unsafe_allow_html=True)
+            emp_cols = st.columns(2)
+            for i, emp in enumerate(world["employees"]):
+                tc_map = {"junior": ACCENT_BLUE, "mid": ACCENT_YELLOW, "senior": ACCENT_PURPLE}
+                tc = tc_map.get(emp["tier"], ACCENT_BLUE)
+                idle = len(emp["tasks"]) == 0
+                sal = f"${emp['salary_cents']/100:,.0f}"
+
+                skills_html = ""
+                for domain in sorted(emp["skills"]):
+                    rate = emp["skills"][domain]
+                    w = min(rate / 10.0 * 100, 100)
+                    skills_html += (
+                        f'<div style="display:flex;align-items:center;gap:4px;margin:1px 0;">'
+                        f'<span style="color:#8b8d93;font-size:0.65rem;min-width:70px;">{domain}</span>'
+                        f'<div style="background:#1a1d23;border-radius:2px;width:60px;height:5px;">'
+                        f'<div style="background:{tc};width:{w:.0f}%;height:100%;border-radius:2px;"></div></div>'
+                        f'<span style="color:#e0e0e0;font-size:0.65rem;">{rate:.1f}</span></div>')
+
+                work = ""
+                if idle:
+                    work = f'<span style="color:{ACCENT_RED};font-size:0.7rem;font-weight:600;">IDLE</span>'
+                else:
+                    for ta in emp["tasks"]:
+                        si = "🔵" if ta["status"] == "active" else "⏳"
+                        work += f'<div style="font-size:0.7rem;">{si} {_esc(ta["title"])}</div>'
+
+                bc = f"{ACCENT_RED}44" if idle else "#2a2d3544"
+                with emp_cols[i % 2]:
+                    st.markdown(f"""
+                    <div style="border:1px solid {bc};border-radius:8px;padding:8px 10px;margin:3px 0;background:#14161a;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                            <span><b style="color:#e0e0e0;font-size:0.82rem;">{_esc(emp['name'])}</b>
+                            <span style="background:{tc}22;color:{tc};padding:0px 5px;border-radius:3px;font-size:0.6rem;font-weight:700;">{emp['tier'].upper()}</span></span>
+                            <span style="color:#8b8d93;font-size:0.68rem;">{sal}/mo</span>
+                        </div>
+                        <div style="display:flex;gap:12px;">
+                            <div>{skills_html}</div>
+                            <div style="flex:1;">{work}</div>
+                        </div>
+                        <div style="color:#8b8d93;font-size:0.62rem;margin-top:2px;">{emp['completed']} tasks completed · {emp['hours_per_day']:.0f}h/day</div>
+                    </div>""", unsafe_allow_html=True)
+
+        # ── RIGHT COLUMN: Clients ──
+        with col_right:
+            st.markdown('<div class="section-header">Clients</div>', unsafe_allow_html=True)
+            for c in sorted(world["clients"], key=lambda x: -x["trust"]):
+                trust = c["trust"]
+                trust_pct = trust / 5.0 * 100
+                tier_map = {"Standard": ACCENT_BLUE, "Premium": ACCENT_YELLOW, "Enterprise": ACCENT_PURPLE}
+                tc = tier_map.get(c["tier"], ACCENT_BLUE)
+                bar_c = ACCENT_GREEN if trust >= 3 else (ACCENT_BLUE if trust >= 1 else GRID_COLOR)
+
+                lc = c["loyalty_class"]
+                border_c = "#2a2d3544"
+                loyalty_badge = ""
+                hidden_row = ""
+                if god_mode:
+                    if lc == "RAT":
+                        border_c = f"{ACCENT_RED}55"
+                        loyalty_badge = f'<span style="background:#ff4b6e22;color:#ff4b6e;padding:1px 6px;border-radius:3px;font-size:0.62rem;font-weight:800;">🐀 RAT {c["loyalty"]:+.2f}</span>'
+                    elif lc == "LOYAL":
+                        border_c = f"{ACCENT_GREEN}33"
+                        loyalty_badge = f'<span style="background:#00d4aa22;color:#00d4aa;padding:1px 6px;border-radius:3px;font-size:0.62rem;font-weight:800;">✦ LOYAL {c["loyalty"]:+.2f}</span>'
+                    else:
+                        loyalty_badge = f'<span style="background:#8b8d9322;color:#8b8d93;padding:1px 6px;border-radius:3px;font-size:0.62rem;font-weight:700;">— {c["loyalty"]:+.2f}</span>'
+
+                    if c["effects_active"]:
+                        hidden_row = (
+                            f'<div style="background:#ff4b6e11;border:1px solid #ff4b6e33;border-radius:4px;'
+                            f'padding:4px 8px;margin-top:4px;font-size:0.68rem;color:#ff8c8c;">'
+                            f'Next task from this client: work inflated +{c["scope_creep_pct"]:.0f}%, '
+                            f'{c["dispute_prob"]:.0f}% chance of clawing back up to '
+                            f'{world["wc"].dispute_clawback_max * abs(c["loyalty"]) * (c["trust"] - world["wc"].loyalty_reveal_trust) / (world["wc"].trust_max - world["wc"].loyalty_reveal_trust) * 100:.0f}% of reward</div>')
+                    elif lc == "RAT":
+                        reveal = world["wc"].loyalty_reveal_trust
+                        hidden_row = (
+                            f'<div style="background:#2a2d3533;border-radius:4px;padding:3px 8px;margin-top:4px;'
+                            f'font-size:0.68rem;color:#8b8d93;">'
+                            f'RAT effects dormant until trust reaches {reveal:.1f} (currently {trust:.1f})</div>')
+
+                record = f'{c["completed"]}✓'
+                if c["failed"]: record += f' {c["failed"]}✗'
+                if c["active"]: record += f' {c["active"]}⟳'
+
+                finance = ""
+                if god_mode and c["completed"] > 0:
+                    net = c["received_total"] - c["dispute_total"]
+                    lost = c["dispute_total"]
+                    finance_parts = f'Promised: ${c["listed_total"]/100:,.0f}'
+                    if lost > 0:
+                        finance_parts += (
+                            f' · Received: <span style="color:{ACCENT_RED};font-weight:600;">${net/100:,.0f}</span>'
+                            f' · <span style="color:{ACCENT_RED};">{c["dispute_n"]} dispute{"s" if c["dispute_n"] != 1 else ""}'
+                            f' (-${lost/100:,.0f})</span>')
+                    else:
+                        finance_parts += f' · Received: <span style="color:{ACCENT_GREEN};font-weight:600;">${net/100:,.0f}</span>'
+                    finance = f'<div style="font-size:0.68rem;color:#8b8d93;margin-top:3px;">{finance_parts}</div>'
+
+                spec = " · ".join(c["specialties"]) if c["specialties"] else "—"
+
+                st.markdown(
+                    f'<div style="border:1px solid {border_c};border-radius:8px;padding:10px 12px;margin:5px 0;background:#14161a;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+                    f'<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+                    f'<b style="color:#e0e0e0;font-size:0.85rem;">{_esc(c["name"])}</b>'
+                    f'<span style="background:{tc}22;color:{tc};padding:0px 6px;border-radius:3px;font-size:0.6rem;font-weight:700;">{c["tier"]}</span>'
+                    f'{loyalty_badge}</div>'
+                    f'<div style="display:flex;align-items:center;gap:6px;">'
+                    f'<div style="background:#1a1d23;border-radius:3px;width:60px;height:6px;">'
+                    f'<div style="background:{bar_c};width:{min(trust_pct,100):.0f}%;height:100%;border-radius:3px;"></div></div>'
+                    f'<span style="color:#e0e0e0;font-weight:700;font-size:0.8rem;">{trust:.1f}</span></div></div>'
+                    f'<div style="display:flex;gap:12px;color:#8b8d93;font-size:0.7rem;">'
+                    f'<span>{spec}</span>'
+                    f'<span>{c["reward_mult"]:.2f}x</span>'
+                    f'<span>{record}</span></div>'
+                    f'{finance}{hidden_row}</div>',
+                    unsafe_allow_html=True,
+                )
+
+
+
 # Auto-refresh
-# ---------------------------------------------------------------------------
-
-st.markdown("<div style='height: 16px'></div>", unsafe_allow_html=True)
-col_r1, col_r2 = st.columns([3, 1])
-with col_r2:
-    auto = st.toggle("Auto-refresh", value=True)
-if auto:
-    time.sleep(5)
-    st.rerun()
+time.sleep(5)
+st.rerun()

@@ -1,118 +1,104 @@
-# Client Trust System
+# Client Trust & Loyalty
 
-**Location**: `services/generate_clients.py`, `services/generate_tasks.py`, `core/handlers/task_complete.py`, `cli/task_commands.py`
+## The Big Idea
 
-## Overview
+Every client has a **hidden loyalty score** the agent can't see. Some clients are loyal (investing in them pays off), some are adversarial "RATs" (investing in them backfires). The agent has to figure out which is which from observed behavior — delayed consequences, not explicit labels.
 
-Trust is the second progression axis alongside prestige. Prestige gates task access; trust determines profitability. Every task belongs to a client. Building trust increases payouts and reduces work, rewarding focused relationship-building.
+This tests three things:
 
-## Configuration
+1. **Can the agent invest under uncertainty?** You don't know if a client is worth it until you've sunk 10+ tasks into them.
+2. **Can the agent spot patterns?** RATs look normal at first. The only signal is that tasks from them fail deadlines more often and money sometimes disappears after completion.
+3. **Can the agent cut losses?** Dropping a RAT costs the trust you built. Keeping one costs real money.
 
-The trust system is controlled by **7 intuitive knobs** in `WorldConfig`. All internal parameters are derived automatically.
+## How Trust Works
 
-| Knob | Default | Meaning |
-|------|---------|---------|
-| `num_clients` | 8 | Number of clients in the game |
-| `trust_max` | 5.0 | Maximum trust level |
-| `trust_build_rate` | 20.0 | ~tasks to reach 80% max trust with one client |
-| `trust_fragility` | 0.5 | 0–1: how punishing failures/inactivity are |
-| `trust_focus_pressure` | 0.5 | 0–1: penalty for spreading work across clients |
-| `trust_reward_ceiling` | 2.6 | Payout multiplier a Premium client gives at max trust |
-| `trust_work_reduction_max` | 0.40 | Max work reduction at max trust (40%) |
-| `trust_gating_fraction` | 0.20 | Fraction of tasks that require trust (~20%) |
+Every client starts at trust 0. Completing tasks builds trust (0-5 scale). Trust gives two benefits:
 
-### Derivation
+- **Work reduction**: Up to 40% less work per task at max trust (loyal clients give clearer specs)
+- **Gated tasks**: ~20% of high-reward tasks require minimum trust to accept
 
-These knobs derive all internal parameters via `_derive_trust_params()`:
+Trust decays daily and drops on failure/cancellation. Working for Client A erodes trust with all other clients (cross-client decay), so you can't maintain trust with everyone — you have to pick 2-3 clients to focus on.
 
-```
-gain_base           = trust_max × 1.6 / trust_build_rate
-fail_penalty        = fragility × 0.6
-cancel_penalty      = fragility × 1.0
-decay_per_day       = fragility × 0.03
-cross_client_decay  = focus_pressure × 0.06
-reward_scale        = (reward_ceiling - 0.50) / (1.69 × trust_max)
-reward_threshold    = 1.0 - 2 × gating_fraction
-reward_ramp         = 2 × gating_fraction
-```
+## How Loyalty Works
 
-## Client Generation
+At world generation, each client gets a hidden loyalty score from `triangular(-1, 1, mode≈0.6)`:
 
-At world-seeding time, `num_clients` clients are generated with:
-- **Reward multiplier**: `triangular(0.7, 2.5, mode=1.0)` — hidden from agent
-- **Tier** (visible): Standard `[0.7, 1.0)`, Premium `[1.0, 1.7)`, Enterprise `[1.7, 2.5]`
-- **Specialties**: 1 domain (60%) or 2 domains (40%)
+- **Loyal** (> 0.3): ~50% of clients. Trust investment pays off via work reduction.
+- **Neutral** (-0.3 to 0.3): ~35%. No special effects.
+- **RAT** (< -0.3): ~15%. Adversarial. Looks normal, exploits you at higher trust.
 
-## Task Domain Bias
+The agent never sees loyalty scores. It only sees: client name, tier, specialties, trust level.
 
-First domain pick has 70% chance of matching client specialty. Remaining domains uniform random.
+## What RATs Do
 
-## Trust Gating
+RAT effects activate once trust exceeds `loyalty_reveal_trust` (default 0.5 for medium). The effects scale with `|loyalty| × sqrt(trust_fraction)` — sqrt scaling means they bite early and plateau, rather than being negligible until max trust.
 
-High-reward tasks may require trust:
+### 1. Scope Creep (Bait-and-Switch)
 
-```
-reward_frac = (reward - floor) / (ceiling - floor)
-trust_prob  = max(0, (reward_frac - threshold) / ramp)
-level       = clamp(1 + reward_frac × 3, 1, 4)
-```
+When you accept a task from a RAT at sufficient trust, the **actual work required is secretly inflated** — but the deadline is calculated from the original (smaller) amount. The task looks completable but isn't.
 
-Trust-gated tasks get a 15% reward boost per required trust level.
+- **Max inflation**: `severity × 0.70` (medium: 56%)
+- **Effect**: Tasks from RATs miss deadlines more often. The agent notices when progress milestones arrive later than expected.
 
-**Why**: Clients reserve best projects for proven vendors.
+### 2. Payment Disputes (Delayed Clawback)
 
-## Trust Reward Formula (at task accept)
+After completing a RAT's task, there's a random chance a `PAYMENT_DISPUTE` event fires 2-7 days later, clawing back a chunk of the reward.
+
+- **Max clawback**: `severity × 0.80` of the reward (medium: 64%)
+- **Max probability**: `severity × 0.50` per task (medium: 40%)
+- **Effect**: The agent gets paid, then days later money disappears. The only way to notice is checking `client history` and seeing listed rewards don't match received amounts.
+
+### 3. Work Reduction for Loyal Clients
+
+Loyal clients reduce required work by `trust_work_reduction_max × trust / trust_max`. This is the payoff for choosing well — loyal clients make tasks faster, meaning more tasks, more revenue.
+
+## Intensity Scaling
+
+All RAT effects use the same intensity formula:
 
 ```
-trust_multiplier = 0.50 + client_mult² × reward_scale × trust² / trust_max
-actual_reward    = listed_reward × trust_multiplier
+trust_fraction = (trust - threshold) / (max_trust - threshold)
+intensity = |loyalty| × sqrt(trust_fraction)
 ```
 
-At trust 0, everyone gets 50% of listed reward. At max trust:
+The sqrt makes effects noticeable early (trust barely above threshold) rather than negligible until max trust. At medium difficulty with a RAT (loyalty -0.57) at trust 2.0:
 
-| Tier | mult | multiplier |
-|------|------|-----------|
-| Standard | 0.85 | 1.40× |
-| Premium | 1.30 | 2.60× |
-| Enterprise | 2.00 | 5.50× |
 
-**Why**: Quadratic on both mult and trust creates dramatic tier separation at high trust. Enterprise is worse than Standard at trust 0 — a genuine investment gamble.
+| Effect              | Value                  |
+| ------------------- | ---------------------- |
+| Scope creep         | +18% work inflation    |
+| Dispute probability | 13% per completed task |
+| Clawback amount     | up to 12% of reward    |
 
-## Work Reduction (at task accept)
 
-```
-work_reduction = trust_work_reduction_max × trust / trust_max
-required_qty  *= (1 - work_reduction)
-```
+## How the Agent Can Detect RATs
 
-**Why**: Trusted clients give clearer specs. Creates virtuous cycle: trust → less work → faster completion → more tasks → more trust.
+The agent has one tool: `yc-bench client history`. This shows per-client:
 
-## Trust Gain (task success)
+- Tasks completed (success/fail count)
+- Listed reward total vs net received (after disputes)
+- Dispute count
 
-```
-gain = gain_base × (1 - trust/trust_max) ^ 1.5
-```
+An agent that periodically checks history will notice:
 
-Diminishing returns: ~0.40/task at trust 0, ~0.07/task at trust 4.
+- A client whose tasks fail deadlines more than others (scope creep)
+- A client where net received < listed rewards (disputes)
 
-## Trust Loss
+An agent that never checks will keep getting exploited.
 
-| Event | Penalty |
-|-------|---------|
-| Task failure | `fragility × 0.6` (default 0.3) |
-| Task cancel | `fragility × 1.0` (default 0.5) |
+## Config Knobs
 
-## Trust Decay
 
-- **Daily**: `fragility × 0.03` per day (default 0.015)
-- **Cross-client**: `focus_pressure × 0.06` per task for other client (default 0.03)
+| Knob                   | Medium | Hard | Nightmare |
+| ---------------------- | ------ | ---- | --------- |
+| `loyalty_rat_fraction` | 0.15   | 0.20 | 0.25      |
+| `loyalty_severity`     | 0.8    | 0.7  | 0.9       |
+| `loyalty_reveal_trust` | 0.5    | 1.5  | 1.0       |
 
-**Why**: Cross-client decay penalizes scattering and rewards focusing on 2–3 clients.
 
-## Sim Resume When Idle
+Derived from severity:
 
-`sim resume` is allowed even with no active tasks — time moves forward regardless. Calling it while idle advances to the next payroll event, burning runway with zero revenue. The prompt warns the agent not to do this, but doesn't prevent it. If the agent ignores the warning and burns payroll, that's a valid failure mode.
+- `scope_creep_max = severity × 0.70`
+- `dispute_clawback_max = severity × 0.80`
+- `dispute_prob_max = severity × 0.50`
 
-## Agent Visibility
-
-Visible: client name, trust_level, tier, specialties. Not visible: exact multiplier, formulas, decay rates.

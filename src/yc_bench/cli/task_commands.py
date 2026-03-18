@@ -98,9 +98,23 @@ def task_accept(
             for r in reqs:
                 r.required_qty = int(float(r.required_qty) * (1 - work_reduction))
 
+        # Compute deadline from advertised qty BEFORE scope creep
         max_domain_qty = max(float(r.required_qty) for r in reqs)
         accepted_at = sim_state.sim_time
         deadline = _compute_deadline(accepted_at, max_domain_qty)
+
+        # Store advertised reward before any dispute can alter it
+        task.advertised_reward_cents = task.reward_funds_cents
+
+        # Scope creep: RAT clients inflate required_qty after accept
+        if task.client_id is not None:
+            client_row = db.query(Client).filter(Client.id == task.client_id).one_or_none()
+            if client_row and client_row.loyalty < -0.3:
+                intensity = abs(client_row.loyalty)  # pure loyalty — no trust gating
+                inflation = _cfg.scope_creep_max * intensity
+                for r in reqs:
+                    inflated = float(r.required_qty) * (1 + inflation)
+                    r.required_qty = int(min(25000, max(200, inflated)))
 
         # Transition task
         task.status = TaskStatus.PLANNED
@@ -257,6 +271,56 @@ def task_assign(
         })
 
 
+@task_app.command("assign-all")
+def task_assign_all(
+    task_id: str = typer.Option(..., "--task-id", help="UUID of the task"),
+):
+    """Assign all idle employees to a task."""
+    try:
+        tid = UUID(task_id)
+    except ValueError:
+        error_output(f"Invalid UUID: {task_id}")
+
+    with get_db() as db:
+        sim_state = db.query(SimState).first()
+        if sim_state is None:
+            error_output("No simulation found.")
+
+        task = db.query(Task).filter(Task.id == tid).one_or_none()
+        if task is None:
+            error_output(f"Task {task_id} not found.")
+        if task.status not in (TaskStatus.PLANNED, TaskStatus.ACTIVE):
+            error_output(f"Task {task_id} must be planned or active to assign (current: {task.status.value}).")
+        if task.company_id != sim_state.company_id:
+            error_output(f"Task {task_id} does not belong to your company.")
+
+        employees = db.query(Employee).filter(Employee.company_id == sim_state.company_id).all()
+        assigned_count = 0
+        for emp in employees:
+            existing = db.query(TaskAssignment).filter(
+                TaskAssignment.task_id == tid,
+                TaskAssignment.employee_id == emp.id,
+            ).one_or_none()
+            if existing is not None:
+                continue
+            db.add(TaskAssignment(
+                task_id=tid,
+                employee_id=emp.id,
+                assigned_at=sim_state.sim_time,
+            ))
+            assigned_count += 1
+
+        db.flush()
+
+        assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id == tid).all()
+        json_output({
+            "task_id": str(task.id),
+            "status": task.status.value,
+            "newly_assigned": assigned_count,
+            "total_assigned": len(assignments),
+        })
+
+
 @task_app.command("dispatch")
 def task_dispatch(
     task_id: str = typer.Option(..., "--task-id", help="UUID of the task to dispatch"),
@@ -280,12 +344,20 @@ def task_dispatch(
         if task.company_id != sim_state.company_id:
             error_output(f"Task {task_id} does not belong to your company.")
 
-        # Validate at least one assignment
-        assignment_count = db.query(func.count(TaskAssignment.employee_id)).filter(
+        # Auto-assign all employees if none are manually assigned.
+        # If the agent pre-assigned specific employees, respect that choice.
+        existing_count = db.query(func.count(TaskAssignment.employee_id)).filter(
             TaskAssignment.task_id == tid
         ).scalar() or 0
-        if assignment_count == 0:
-            error_output(f"Task {task_id} has no assignments. Assign employees before dispatching.")
+        if existing_count == 0:
+            employees = db.query(Employee).filter(Employee.company_id == sim_state.company_id).all()
+            for emp in employees:
+                db.add(TaskAssignment(
+                    task_id=tid,
+                    employee_id=emp.id,
+                    assigned_at=sim_state.sim_time,
+                ))
+            db.flush()
 
         # Transition to active
         task.status = TaskStatus.ACTIVE
@@ -306,10 +378,13 @@ def task_dispatch(
                     impacted.add(peer_task.id)
         recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, milestones=_get_world_cfg().task_progress_milestones)
 
+        final_count = db.query(func.count(TaskAssignment.employee_id)).filter(
+            TaskAssignment.task_id == tid
+        ).scalar() or 0
         json_output({
             "task_id": str(task.id),
             "status": task.status.value,
-            "assignment_count": assignment_count,
+            "assignment_count": final_count,
         })
 
 

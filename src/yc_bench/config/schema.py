@@ -146,6 +146,11 @@ class WorldConfig(BaseModel):
     trust_work_reduction_max: float
     trust_gating_fraction: float
 
+    # --- Client loyalty (adversarial clients) ---
+    loyalty_rat_fraction: float = 0.15
+    loyalty_severity: float = 0.5
+    loyalty_reveal_trust: float = 2.0
+
     # --- Derived trust params (computed from knobs above, do not set directly) ---
     trust_min: float = 0.0
     trust_gain_base: float = 0.0
@@ -168,6 +173,12 @@ class WorldConfig(BaseModel):
     client_tier_premium_threshold: float = 1.0
     client_tier_enterprise_threshold: float = 1.7
     task_specialty_domain_bias: float = 0.7
+
+    # --- Derived loyalty params (computed from knobs above, do not set directly) ---
+    loyalty_mode: float = 0.61
+    scope_creep_max: float = 0.35
+    dispute_clawback_max: float = 0.40
+    dispute_prob_max: float = 0.25
 
     # --- Task scaling ---
     prestige_qty_scale: float
@@ -225,6 +236,13 @@ class WorldConfig(BaseModel):
         # At 0.2: threshold=0.6, ramp=0.4 (top 40% CAN require, effective ~20%)
         self.trust_reward_threshold = max(0.0, 1.0 - 2.0 * self.trust_gating_fraction)
         self.trust_reward_ramp = min(1.0, 2.0 * self.trust_gating_fraction)
+
+        # loyalty params
+        # loyalty_mode: triangular(-1, 1, mode) where mode produces ~rat_fraction below -0.3
+        self.loyalty_mode = 1.0 - 2.6 * self.loyalty_rat_fraction
+        self.scope_creep_max = self.loyalty_severity * 1.00
+        self.dispute_clawback_max = self.loyalty_severity * 1.20
+        self.dispute_prob_max = self.loyalty_severity * 1.00
 
         return self
 

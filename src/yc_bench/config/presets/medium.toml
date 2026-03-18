@@ -1,78 +1,73 @@
-# medium — Can the agent climb the prestige ladder?
+# medium — Can the agent detect and avoid adversarial clients?
 #
-# Now prestige matters. Most tasks need prestige 2–4. At startup, only
-# ~30% of the market is accessible (prestige-1 tasks). The agent must
-# complete low-prestige tasks to build domain prestige, then graduate
-# to higher-reward tiers. Random domain climbing wastes time — the
-# agent should focus on 2–3 domains.
+# The environment is survivable for any competent agent. The differentiator
+# is the client trust/loyalty system: ~30% of clients are hidden RATs that
+# silently inflate work (scope creep) and claw back payments (disputes).
 #
-# Two-domain tasks appear for the first time. Employee assignment
-# becomes a cross-domain puzzle: you need good employees in BOTH
-# domains to finish on time.
+# RAT tasks look identical to normal tasks. The only way to detect them is
+# by checking `client history` and noticing listed vs received discrepancies.
 #
-# Economics (5 employees):
-#   Monthly payroll ≈ $32K.  Starting runway ≈ 7.8 months.
-#   Mode task: 2 domains × 900 units = 1800 total.
-#   Deadline: max(7, 1800/200) = 9 business days.
-#   Focused team: 3 on domain1 (3×5.1×9=138/day → 6.5 days)
-#                 2 on domain2 (2×5.1×9=92/day → 9.8 days). Tight!
-#   Prestige-1 reward: ~$30K. Prestige-4 reward: $30K × 2.35 = $70K.
-#   Climbing prestige doubles income per task.
-#
-# What is tested:
-#   - Does the agent understand prestige gates market access?
-#   - Does it specialise in a few domains rather than spreading thin?
-#   - Can it handle 2-domain task assignments?
+# The greedy bot can't detect RATs — it picks tasks blindly and bleeds money.
+# A smart LLM that checks history and avoids RATs should clearly outperform.
 
 extends = "default"
 
 name        = "medium"
-description = "1-year medium. Prestige ladder active, 2-domain tasks. Tests strategic domain specialisation."
+description = "1-year medium. Tests client trust awareness — can the agent detect adversarial clients?"
 
 [sim]
 horizon_years = 1
 
 [loop]
-auto_advance_after_turns = 8
+auto_advance_after_turns = 5
 
 [world]
-# Inherits num_employees=10, num_market_tasks=200 from default.
+num_employees            = 8
+initial_funds_cents      = 20_000_000    # $200,000
+num_clients              = 6
 
-# Deadline: 1500/150 = 10 days. Moderate pressure.
 deadline_qty_per_day = 150.0
-
-# Real penalties — failing costs prestige, cancelling costs more.
+deadline_min_biz_days = 6
 penalty_fail_multiplier   = 1.0
 penalty_cancel_multiplier = 1.5
+# No per-task salary bumps — payroll stays flat.
+# Cost pressure comes from scope creep (wasted time) not payroll growth.
+salary_bump_pct = 0.0
+reward_prestige_scale = 0.30
 
-# Moderate salary bump — starts to matter by month 10.
-salary_bump_pct = 0.01
-
-# Prestige scaling starting to reward climbing.
-reward_prestige_scale = 0.45
-
-# --- Client trust (balanced: default build speed, moderate penalties) ---
-trust_build_rate         = 20.0
-trust_fragility          = 0.5
-trust_focus_pressure     = 0.5
+# --- Client trust ---
+trust_build_rate         = 10.0
+trust_fragility          = 0.3
+trust_focus_pressure     = 0.3
 trust_reward_ceiling     = 2.6
-trust_work_reduction_max = 0.40
-trust_gating_fraction    = 0.20
+trust_work_reduction_max = 0.50
+trust_gating_fraction    = 0.30
+
+# --- Client loyalty ---
+loyalty_rat_fraction     = 0.35
+loyalty_severity         = 2.0
+loyalty_reveal_trust     = 0.0
+
+task_progress_milestones = []
+
+[world.dist.reward_funds_cents]
+type = "triangular"
+low  = 200_000
+high = 1_200_000
+mode = 500_000
 
 [world.dist.required_prestige]
 type = "triangular"
 low  = 1
-high = 7
-mode = 3        # Most tasks need prestige 2–4. Thin early market.
+high = 5
+mode = 1
 
 [world.dist.domain_count]
-type = "triangular"
-low  = 1
-high = 3
-mode = 2        # Most tasks need 2 domains.
+type = "constant"
+value = 1
 
 [world.dist.required_qty]
 type = "triangular"
-low  = 700
-high = 3000
-mode = 1500     # Larger tasks — ~6.5 days with full team, no parallelism.
+low  = 400
+high = 1500
+mode = 800

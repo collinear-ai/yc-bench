@@ -67,6 +67,12 @@ def _rates_by_employee_domain(rates):
 
 def _effective_rate_for_task_domain(*, task_id, domain, assignments,
                                     assignment_counts, base_rates):
+    """Compute effective rate for one task+domain.
+
+    Throughput split uses sqrt(k) instead of k: two concurrent tasks each run at
+    1/sqrt(2) ≈ 71% speed, not 50%. This makes mild parallelism (2-3 tasks)
+    more efficient than strict sequential.
+    """
     total = Decimal("0")
     for a in assignments:
         if a.task_id != task_id:
@@ -75,7 +81,8 @@ def _effective_rate_for_task_domain(*, task_id, domain, assignments,
         if k <= 0:
             continue
         base = base_rates.get((a.employee_id, domain), Decimal("0"))
-        total += base / Decimal(k)
+        from math import sqrt
+        total += base / Decimal(str(round(sqrt(k), 6)))
     return total
 
 def _weighted_ratio_from_rows(rows, *, task_id_label):

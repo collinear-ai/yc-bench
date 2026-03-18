@@ -4,8 +4,9 @@ from typing import Optional
 
 import typer
 
-from ..db.models.client import Client
-from ..db.models.company import Domain
+from ..db.models.client import Client, ClientTrust
+from ..db.models.company import CompanyPrestige, Domain
+from ..db.models.sim_state import SimState
 from ..db.models.task import Task, TaskRequirement, TaskStatus
 from ..config import get_world_config
 from . import get_db, json_output, error_output
@@ -27,8 +28,20 @@ def market_browse(
     with get_db() as db:
         query = db.query(Task).filter(Task.status == TaskStatus.MARKET)
 
-        if required_prestige_lte is not None:
-            query = query.filter(Task.required_prestige <= required_prestige_lte)
+        # Filter to only tasks the agent can actually accept:
+        # - Per-domain prestige check (not just max — all task domains must be met)
+        # - Trust requirement check
+        sim_state = db.query(SimState).first()
+        if sim_state:
+            prestige_rows = db.query(CompanyPrestige).filter(
+                CompanyPrestige.company_id == sim_state.company_id
+            ).all()
+            prestige_map = {p.domain: int(float(p.prestige_level)) for p in prestige_rows}
+            min_prestige = min(prestige_map.values()) if prestige_map else 1
+            # Quick filter: required_prestige must be <= min domain prestige to guarantee acceptance
+            # Tasks between min and max prestige MIGHT be acceptable (depends on domains)
+            max_prestige = max(prestige_map.values()) if prestige_map else 1
+            query = query.filter(Task.required_prestige <= max_prestige)
 
         if reward_min_cents is not None:
             query = query.filter(Task.reward_funds_cents >= reward_min_cents)

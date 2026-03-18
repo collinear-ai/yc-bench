@@ -31,6 +31,7 @@ from .eta import recalculate_etas
 from .events import consume_event, fetch_next_event, insert_event
 from .handlers.bankruptcy import handle_bankruptcy
 from .handlers.horizon_end import handle_horizon_end
+from .handlers.payment_dispute import handle_payment_dispute
 from .handlers.task_complete import handle_task_complete
 from .handlers.task_half import handle_task_half
 from .progress import flush_progress
@@ -86,12 +87,37 @@ def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id:
         # Recalculate ETAs — freed employees change topology
         from ..config import get_world_config
         recalculate_etas(db, company_id, sim_time, milestones=get_world_config().task_progress_milestones)
+        # Include task title and client name so the agent can see which client's task failed
+        from ..db.models.task import Task
+        from ..db.models.client import Client
+        task_row = db.query(Task).filter(Task.id == result.task_id).one_or_none()
+        client_name = None
+        task_title = None
+        if task_row:
+            task_title = task_row.title
+            if task_row.client_id:
+                cl = db.query(Client).filter(Client.id == task_row.client_id).one_or_none()
+                if cl:
+                    client_name = cl.name
         return {
             "type": "task_completed",
             "task_id": str(result.task_id),
+            "task_title": task_title,
+            "client_name": client_name,
             "success": result.success,
             "funds_delta": result.funds_delta,
+            "listed_reward": result.listed_reward,
             "trust_delta": result.trust_delta,
+            "bankrupt": result.bankrupt,
+        }
+
+    elif event.event_type == EventType.PAYMENT_DISPUTE:
+        result = handle_payment_dispute(db, event, sim_time)
+        return {
+            "type": "payment_dispute",
+            "task_id": str(result.task_id),
+            "clawback_cents": result.clawback_cents,
+            "client_name": event.payload.get("client_name", "unknown"),
             "bankrupt": result.bankrupt,
         }
 

@@ -4,23 +4,27 @@ On completion:
 - If completion_time <= deadline: success → add reward funds, add prestige, skill-boost employees.
 - If completion_time > deadline: fail → set completed_fail, apply 0.8 * delta prestige penalty.
 After either outcome, recalculate ETAs (freed employees change topology).
+Payment disputes may be scheduled for RAT clients at high trust.
 """
 from __future__ import annotations
 
+import random as _stdlib_random
 from dataclasses import dataclass, field
+from datetime import timedelta
 from decimal import Decimal
 from typing import Dict
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ...db.models.client import ClientTrust
+from ...db.models.client import Client, ClientTrust
 from ...db.models.company import Company, CompanyPrestige, Domain
 from ...db.models.employee import Employee, EmployeeSkillRate
 from ...config import get_world_config
-from ...db.models.event import SimEvent
+from ...db.models.event import EventType, SimEvent
 from ...db.models.ledger import LedgerCategory, LedgerEntry
 from ...db.models.task import Task, TaskAssignment, TaskRequirement, TaskStatus
+from ..events import insert_event
 
 
 @dataclass
@@ -28,6 +32,7 @@ class TaskCompleteResult:
     task_id: UUID
     success: bool
     funds_delta: int = 0
+    listed_reward: int = 0
     prestige_changes: Dict[str, float] = field(default_factory=dict)
     trust_delta: float = 0.0
     bankrupt: bool = False
@@ -81,7 +86,7 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
                 old = float(prestige.prestige_level)
                 prestige.prestige_level = min(
                     Decimal(str(wc.prestige_max)),
-                    prestige.prestige_level + task.reward_prestige_delta,
+                    prestige.prestige_level + Decimal(str(float(task.reward_prestige_delta))),
                 )
                 prestige_changes[req.domain.value] = float(prestige.prestige_level) - old
 
@@ -98,7 +103,7 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
                         EmployeeSkillRate.domain == domain,
                     ).one_or_none()
                     if skill is not None:
-                        boost = skill.rate_domain_per_hour * task.skill_boost_pct
+                        boost = skill.rate_domain_per_hour * Decimal(str(float(task.skill_boost_pct)))
                         skill.rate_domain_per_hour = min(
                             skill.rate_domain_per_hour + boost,
                             Decimal(str(wc.skill_rate_max)),
@@ -165,6 +170,8 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
                     new = max(wc.trust_min, old - wc.trust_cross_client_decay)
                     other_ct.trust_level = Decimal(str(round(new, 3)))
 
+    # Payment disputes disabled — scope creep (deadline failures) is the primary RAT mechanic.
+
     db.flush()
 
     # Check bankruptcy
@@ -175,6 +182,7 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
         task_id=task_id,
         success=success,
         funds_delta=funds_delta,
+        listed_reward=task.advertised_reward_cents or task.reward_funds_cents,
         prestige_changes=prestige_changes,
         trust_delta=trust_delta,
         bankrupt=bankrupt,

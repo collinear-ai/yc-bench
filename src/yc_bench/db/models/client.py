@@ -36,6 +36,11 @@ class Client(Base):
         nullable=False,
         default=list,
     )
+    loyalty = mapped_column(
+        Float,
+        nullable=False,
+        default=0.0,
+    )
 
 
 class ClientTrust(Base):

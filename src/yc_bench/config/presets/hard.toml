@@ -66,6 +66,11 @@ trust_reward_ceiling     = 2.4
 trust_work_reduction_max = 0.35
 trust_gating_fraction    = 0.25
 
+# --- Client loyalty (harsh: more RATs, more severe) ---
+loyalty_rat_fraction     = 0.20
+loyalty_severity         = 0.7
+loyalty_reveal_trust     = 1.5
+
 [world.dist.required_prestige]
 type = "triangular"
 low  = 1

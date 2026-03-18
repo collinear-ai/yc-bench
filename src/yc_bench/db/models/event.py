@@ -11,6 +11,7 @@ from ..base import Base
 class EventType(str, Enum):
     TASK_HALF_PROGRESS = "task_half_progress"
     TASK_COMPLETED = "task_completed"
+    PAYMENT_DISPUTE = "payment_dispute"
     BANKRUPTCY = "bankruptcy"
     HORIZON_END = "horizon_end"
 

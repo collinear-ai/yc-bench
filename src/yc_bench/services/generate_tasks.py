@@ -150,12 +150,14 @@ def _make_task(rng, cfg, prestige, serial, requirements, client_index=0):
     )
 
 
-def generate_tasks(*, run_seed, count, cfg, client_specialties=None):
+def generate_tasks(*, run_seed, count, cfg, client_specialties=None, client_reward_mults=None):
     """Generate market tasks.
 
     Args:
         client_specialties: list of specialty domain lists, one per client index.
             e.g. [["research", "training"], ["inference"]] for 2 clients.
+        client_reward_mults: list of reward multipliers per client index.
+            Task rewards are scaled by the client's multiplier.
     """
     if count <= 0:
         return []
@@ -169,8 +171,16 @@ def generate_tasks(*, run_seed, count, cfg, client_specialties=None):
         client_index = (idx - 1) % num_clients
         spec_domains = client_specialties[client_index % len(client_specialties)] if client_specialties else None
         requirements = _sample_requirements(rng, cfg, prestige=prestige, specialty_domains=spec_domains)
-        out.append(_make_task(rng, cfg, prestige, serial=idx, requirements=requirements,
-                              client_index=client_index))
+        task = _make_task(rng, cfg, prestige, serial=idx, requirements=requirements,
+                          client_index=client_index)
+        # Apply client reward multiplier — higher-mult clients offer better-paying tasks
+        if client_reward_mults and client_index < len(client_reward_mults):
+            mult = client_reward_mults[client_index]
+            new_reward = int(task.reward_funds_cents * mult)
+            task = GeneratedTask(
+                **{**task.__dict__, "reward_funds_cents": new_reward}
+            )
+        out.append(task)
     return out
 
 

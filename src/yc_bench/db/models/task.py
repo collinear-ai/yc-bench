@@ -95,6 +95,10 @@ class Task(Base):
         default=0,
         server_default=text("0"),
     )
+    advertised_reward_cents = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
 
 class TaskRequirement(Base):
     __tablename__ = "task_requirements"

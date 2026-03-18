@@ -18,11 +18,20 @@ app = typer.Typer(name="yc-bench", add_completion=False)
 # Helpers shared across command modules
 # ---------------------------------------------------------------------------
 
+_engine_cache = {}
+
 @contextmanager
 def get_db():
-    """Yield a transactional SQLAlchemy session, commit on success."""
-    engine = build_engine()
-    init_db(engine)
+    """Yield a transactional SQLAlchemy session, commit on success.
+
+    Reuses the same engine across calls to avoid SQLite connection visibility issues.
+    """
+    from ..db.session import _get_database_url
+    db_url = _get_database_url()
+    if db_url not in _engine_cache:
+        _engine_cache[db_url] = build_engine()
+        init_db(_engine_cache[db_url])
+    engine = _engine_cache[db_url]
     factory = build_session_factory(engine)
     with session_scope(factory) as session:
         yield session

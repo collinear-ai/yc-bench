@@ -95,6 +95,14 @@ trust_reward_ceiling     = 2.6
 trust_work_reduction_max = 0.40
 trust_gating_fraction    = 0.20
 
+# --- Client loyalty (adversarial clients) ---
+# loyalty_rat_fraction:   target fraction of clients that are adversarial RATs (~15%)
+# loyalty_severity:       0-1, how punishing RATs are (scope creep, dispute clawback)
+# loyalty_reveal_trust:   trust level where loyalty effects begin manifesting
+loyalty_rat_fraction     = 0.15
+loyalty_severity         = 0.5
+loyalty_reveal_trust     = 2.0
+
 # Daily prestige decay per domain. Domains not exercised lose prestige
 # over time: -0.005/day → -0.15/month. Untouched domain drops ~1 level
 # every ~6 months. Prevents single-domain hyper-specialization.

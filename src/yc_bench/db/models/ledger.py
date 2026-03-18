@@ -13,6 +13,7 @@ class LedgerCategory(str, Enum):
     TASK_REWARD = "task_reward"
     TASK_FAIL_PENALTY = "task_fail_penalty"
     TASK_CANCEL_PENALTY = "task_cancel_penalty"
+    PAYMENT_DISPUTE = "payment_dispute"
 
 class LedgerEntry(Base):
     __tablename__ = "ledger_entries"

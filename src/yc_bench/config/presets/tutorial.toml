@@ -52,6 +52,11 @@ trust_reward_ceiling     = 3.0
 trust_work_reduction_max = 0.40
 trust_gating_fraction    = 0.10
 
+# --- Client loyalty (very forgiving: rare and mild RATs) ---
+loyalty_rat_fraction     = 0.05
+loyalty_severity         = 0.2
+loyalty_reveal_trust     = 3.0
+
 [world.dist.required_prestige]
 type = "constant"
 value = 1        # ALL tasks are prestige-1 — no gating at all.
