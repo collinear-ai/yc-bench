@@ -123,19 +123,12 @@ def _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers, n_ac
     ).all()
     trust_map = {str(ct.client_id): float(ct.trust_level) for ct in trust_rows}
 
-    # Browse market with prestige filter (same as LLM's `market browse --required-prestige-lte N`).
-    # Then paginate within accessible tasks, limited to browse_limit per page.
-    browse_limit = world_cfg.market_browse_default_limit  # default: 50
-    # Use floor of max prestige as filter (greedy: take best available at current level)
-    prestige_filter = int(max_prestige)
+    # Browse full market — bot has direct DB access, no CLI browse limit.
+    # The LLM agent has its own browse limit via the CLI.
     market_tasks = (
         db.query(Task)
-        .filter(
-            Task.status == TaskStatus.MARKET,
-            Task.required_prestige <= prestige_filter,
-        )
+        .filter(Task.status == TaskStatus.MARKET)
         .order_by(Task.reward_funds_cents.desc())
-        .limit(browse_limit)
         .all()
     )
 
