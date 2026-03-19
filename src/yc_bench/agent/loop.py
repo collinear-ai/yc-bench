@@ -41,6 +41,11 @@ def _snapshot_state(db: Session, company_id):
         Employee.company_id == company_id,
     ).scalar() or 0
 
+    # Read scratchpad if it exists
+    from ..db.models.scratchpad import Scratchpad
+    scratchpad = db.query(Scratchpad).filter(Scratchpad.company_id == company_id).one_or_none()
+    scratchpad_content = scratchpad.content if scratchpad and scratchpad.content else None
+
     return {
         "sim_time": sim_state.sim_time.isoformat(),
         "horizon_end": sim_state.horizon_end.isoformat(),
@@ -50,6 +55,7 @@ def _snapshot_state(db: Session, company_id):
         "employee_count": employee_count,
         "monthly_payroll_cents": int(monthly_payroll),
         "bankrupt": company.funds_cents < 0,
+        "scratchpad": scratchpad_content,
     }
 
 
@@ -157,6 +163,7 @@ def run_agent_loop(
                 RuntimeTurnRequest(
                     session_id=run_state.session_id,
                     user_input=user_input,
+                    scratchpad=snapshot.get("scratchpad"),
                 )
             )
             agent_output = result.final_output

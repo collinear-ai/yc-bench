@@ -56,12 +56,42 @@ def market_browse(
                 )
             )
 
-        total = query.count()
-        tasks = query.order_by(Task.reward_funds_cents.desc()).offset(offset).limit(limit).all()
+        # Build trust map for filtering
+        trust_map = {}
+        if sim_state:
+            trust_rows = db.query(ClientTrust).filter(
+                ClientTrust.company_id == sim_state.company_id
+            ).all()
+            trust_map = {ct.client_id: float(ct.trust_level) for ct in trust_rows}
+
+        # Fetch more than limit, then post-filter to per-domain prestige + trust
+        raw_tasks = query.order_by(Task.reward_funds_cents.desc()).all()
 
         results = []
-        for task in tasks:
+        skipped = 0
+        for task in raw_tasks:
             reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == task.id).all()
+
+            # Per-domain prestige check: ALL domains must meet threshold
+            if sim_state and prestige_map:
+                meets_prestige = all(
+                    prestige_map.get(r.domain, 1) >= task.required_prestige
+                    for r in reqs
+                )
+                if not meets_prestige:
+                    continue
+
+            # Trust requirement check
+            if task.required_trust > 0 and task.client_id is not None:
+                client_trust = trust_map.get(task.client_id, 0.0)
+                if client_trust < task.required_trust:
+                    continue
+
+            # Pagination
+            if skipped < offset:
+                skipped += 1
+                continue
+
             requirements = [
                 {
                     "domain": r.domain.value,
@@ -77,8 +107,7 @@ def market_browse(
                     client_name = client_row.name
 
             results.append({
-                "task_id": str(task.id),
-                "title": task.title,
+                "task_id": task.title,
                 "client_name": client_name,
                 "required_prestige": task.required_prestige,
                 "required_trust": task.required_trust,
@@ -88,8 +117,11 @@ def market_browse(
                 "requirements": requirements,
             })
 
+            if len(results) >= limit:
+                break
+
         json_output({
-            "total": total,
+            "total": len(results),
             "offset": offset,
             "limit": limit,
             "tasks": results,

@@ -123,10 +123,10 @@ def _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers, n_ac
     ).all()
     trust_map = {str(ct.client_id): float(ct.trust_level) for ct in trust_rows}
 
-    # Browse market with prestige filter (same as LLM's `market browse --required-prestige-lte N`).
-    # Then paginate within accessible tasks, limited to browse_limit per page.
+    # Same browse limit as the LLM's default `market browse`.
+    # When trust-gated tasks fill the top 50, the bot stalls and
+    # payroll drains its balance — the cost of not building trust.
     browse_limit = world_cfg.market_browse_default_limit  # default: 50
-    # Use floor of max prestige as filter (greedy: take best available at current level)
     prestige_filter = int(max_prestige)
     market_tasks = (
         db.query(Task)
@@ -302,11 +302,11 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                 Task.status == TaskStatus.ACTIVE,
             ).count()
 
-            # Accept up to 1 new task per turn (same pace as LLM agent).
-            # The LLM spends multiple tool calls to browse/accept/assign/dispatch
-            # one task, so it effectively accepts ~1 per turn.
+            # Accept 1 new task per event cycle (same pacing as LLM agent).
+            # The LLM needs ~1 turn to browse+accept+assign+dispatch one task,
+            # so it effectively accepts 1 per sim resume cycle.
             newly_accepted = []
-            while active_count + len(newly_accepted) < MAX_CONCURRENT_TASKS and len(newly_accepted) < MAX_CONCURRENT_TASKS:
+            if active_count < MAX_CONCURRENT_TASKS:
                 employees = db.query(Employee).filter(Employee.company_id == company_id).all()
                 employee_tiers = [emp.tier for emp in employees]
                 employee_ids = [emp.id for emp in employees]
@@ -359,6 +359,7 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                     if client_row and client_row.loyalty < -0.3:
                         intensity = abs(client_row.loyalty)
                         inflation = world_cfg.scope_creep_max * intensity
+                        inflation = max(1.3, inflation)  # minimum 130% to guarantee deadline failure
                         for r in reqs:
                             inflated = float(r.required_qty) * (1 + inflation)
                             r.required_qty = int(min(25000, max(200, inflated)))
@@ -444,15 +445,23 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
             # Now advance time (only if we have active tasks)
             total_active = active_count + len(newly_accepted)
             if total_active == 0:
-                # No accessible tasks at all — advance to next event to let
-                # prestige/trust change, then try again.
-                next_event = fetch_next_event(db, company_id, sim_state.horizon_end)
-                if next_event is None:
-                    break
-                adv = advance_time(db, company_id, next_event.scheduled_at)
-                if adv.bankrupt or adv.horizon_reached:
-                    break
-                continue
+                # No accessible tasks — drain payroll until bankrupt or horizon.
+                # Don't retry finding tasks (the bot is trust-gated out of the market).
+                while True:
+                    if company.funds_cents < 0:
+                        break
+                    if sim_state.sim_time >= sim_state.horizon_end:
+                        break
+                    target = sim_state.horizon_end
+                    next_event = fetch_next_event(db, company_id, target)
+                    if next_event is not None:
+                        target = next_event.scheduled_at
+                    adv = advance_time(db, company_id, target)
+                    db.refresh(sim_state)
+                    db.refresh(company)
+                    if adv.bankrupt or adv.horizon_reached:
+                        break
+                break
 
             next_event = fetch_next_event(db, company_id, sim_state.horizon_end)
             if next_event is None:

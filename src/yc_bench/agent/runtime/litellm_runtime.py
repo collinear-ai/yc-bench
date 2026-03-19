@@ -44,6 +44,7 @@ _RUN_COMMAND_TOOL = {
 @dataclass
 class _Session:
     messages: list = field(default_factory=list)
+    scratchpad: str | None = None
 
 
 class LiteLLMRuntime(AgentRuntime):
@@ -92,6 +93,8 @@ class LiteLLMRuntime(AgentRuntime):
 
     def run_turn(self, request):
         session = self._get_or_create_session(request.session_id)
+        # Update scratchpad on session (appended to system prompt, not message history)
+        session.scratchpad = request.scratchpad
         # Proactively drop old rounds before appending new input.
         self._proactive_truncate(session)
         session.messages.append({"role": "user", "content": request.user_input})
@@ -153,6 +156,9 @@ class LiteLLMRuntime(AgentRuntime):
     def _do_turn(self, session):
         """One LLM call + tool execution. Returns (final_output, tool_calls_made, resume_payload, cost_usd)."""
         system_prompt = self._settings.system_prompt or SYSTEM_PROMPT
+        # Append scratchpad to system prompt (avoids duplication in message history)
+        if session.scratchpad:
+            system_prompt = system_prompt + f"\n\n## Your Scratchpad Notes\n{session.scratchpad}"
         messages = [{"role": "system", "content": system_prompt}] + session.messages
 
         kwargs = dict(

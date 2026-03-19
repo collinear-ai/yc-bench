@@ -132,6 +132,7 @@ class WorldConfig(BaseModel):
     prestige_max: float
     prestige_min: float
     penalty_fail_multiplier: float
+    penalty_fail_funds_pct: float = 0.0  # fraction of advertised reward deducted on failure
     penalty_cancel_multiplier: float
     reward_prestige_scale: float
     prestige_decay_per_day: float

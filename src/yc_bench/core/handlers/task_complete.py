@@ -90,24 +90,34 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
                 )
                 prestige_changes[req.domain.value] = float(prestige.prestige_level) - old
 
-        # Skill boost assigned employees
+        # Skill boost: only the top contributors get boosted (Brooks's Law).
+        # Overcrowded employees (beyond the efficient team size) are overhead
+        # and don't learn from the experience.
+        from ..progress import _EFFICIENT_TEAM_SIZE
         assignments = db.query(TaskAssignment).filter(
             TaskAssignment.task_id == task_id
         ).all()
         if task.skill_boost_pct > 0:
             task_domains = {req.domain for req in reqs}
-            for a in assignments:
-                for domain in task_domains:
+            for domain in task_domains:
+                # Rank employees by their rate in this domain (best first)
+                emp_rates = []
+                for a in assignments:
                     skill = db.query(EmployeeSkillRate).filter(
                         EmployeeSkillRate.employee_id == a.employee_id,
                         EmployeeSkillRate.domain == domain,
                     ).one_or_none()
                     if skill is not None:
-                        boost = skill.rate_domain_per_hour * Decimal(str(float(task.skill_boost_pct)))
-                        skill.rate_domain_per_hour = min(
-                            skill.rate_domain_per_hour + boost,
-                            Decimal(str(wc.skill_rate_max)),
-                        )
+                        emp_rates.append(skill)
+                emp_rates.sort(key=lambda s: s.rate_domain_per_hour, reverse=True)
+
+                # Only boost the top N (efficient team size)
+                for skill in emp_rates[:_EFFICIENT_TEAM_SIZE]:
+                    boost = skill.rate_domain_per_hour * Decimal(str(float(task.skill_boost_pct)))
+                    skill.rate_domain_per_hour = min(
+                        skill.rate_domain_per_hour + boost,
+                        Decimal(str(wc.skill_rate_max)),
+                    )
 
         # Salary bump: small raise for each employee who contributed to this task
         if wc.salary_bump_pct > 0:
@@ -135,6 +145,22 @@ def handle_task_complete(db: Session, event: SimEvent, sim_time) -> TaskComplete
                     prestige.prestige_level - penalty,
                 )
                 prestige_changes[req.domain.value] = float(prestige.prestige_level) - old
+
+        # Financial penalty: deduct a fraction of the advertised reward
+        if wc.penalty_fail_funds_pct > 0:
+            advertised = task.advertised_reward_cents or task.reward_funds_cents
+            penalty_cents = int(advertised * wc.penalty_fail_funds_pct)
+            company = db.query(Company).filter(Company.id == company_id).one()
+            company.funds_cents -= penalty_cents
+            funds_delta = -penalty_cents
+            db.add(LedgerEntry(
+                company_id=company_id,
+                occurred_at=sim_time,
+                category=LedgerCategory.TASK_REWARD,
+                amount_cents=-penalty_cents,
+                ref_type="task",
+                ref_id=task_id,
+            ))
 
     # --- Client trust update ---
     trust_delta = 0.0

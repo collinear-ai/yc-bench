@@ -19,6 +19,7 @@ class RuntimeSettings:
 class RuntimeTurnRequest:
     session_id: str
     user_input: str
+    scratchpad: str | None = None
 
 @dataclass(frozen=True)
 class RuntimeTurnResult:

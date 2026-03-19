@@ -206,7 +206,13 @@ def query_funds_only(fct):
 # Chart helpers
 # ---------------------------------------------------------------------------
 
-def _chart_layout(title="", height=400, yaxis_title="", show_legend=True):
+def _chart_layout(title="", height=400, yaxis_title="", show_legend=True, x_range=None):
+    xaxis_opts = dict(
+        gridcolor=GRID_COLOR, zeroline=False,
+        tickfont=dict(size=10, color=TEXT_MUTED),
+    )
+    if x_range:
+        xaxis_opts["range"] = x_range
     return dict(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
@@ -215,10 +221,7 @@ def _chart_layout(title="", height=400, yaxis_title="", show_legend=True):
         title=dict(text=title, font=dict(size=14, color=TEXT_COLOR), x=0, xanchor="left"),
         height=height,
         margin=dict(l=60, r=20, t=40, b=40),
-        xaxis=dict(
-            gridcolor=GRID_COLOR, zeroline=False,
-            tickfont=dict(size=10, color=TEXT_MUTED),
-        ),
+        xaxis=xaxis_opts,
         yaxis=dict(
             title=yaxis_title, gridcolor=GRID_COLOR, zeroline=False,
             tickfont=dict(size=10, color=TEXT_MUTED),

@@ -27,13 +27,16 @@ initial_funds_cents      = 20_000_000    # $200,000
 num_clients              = 6
 
 deadline_qty_per_day = 150.0
-deadline_min_biz_days = 6
+deadline_min_biz_days = 7
 penalty_fail_multiplier   = 1.0
+penalty_fail_funds_pct    = 0.25   # failing costs 25% of advertised reward
 penalty_cancel_multiplier = 1.5
-# No per-task salary bumps — payroll stays flat.
-# Cost pressure comes from scope creep (wasted time) not payroll growth.
-salary_bump_pct = 0.0
+# Salary bumps: each completed task raises salary for ALL assigned employees.
+# Assign-all (8 bumps/task) compounds payroll fast → unsustainable.
+# Selective assignment (3-4/task) grows slower → survivable for smart agents.
+salary_bump_pct = 0.01
 reward_prestige_scale = 0.30
+prestige_decay_per_day = 0.0
 
 # --- Client trust ---
 trust_build_rate         = 10.0
@@ -42,10 +45,11 @@ trust_focus_pressure     = 0.3
 trust_reward_ceiling     = 2.6
 trust_work_reduction_max = 0.50
 trust_gating_fraction    = 0.30
+trust_gated_reward_boost = 0.50    # trust-4 task pays 3× base (was 1.6× at 0.15)
 
 # --- Client loyalty ---
-loyalty_rat_fraction     = 0.35
-loyalty_severity         = 2.0
+loyalty_rat_fraction     = 0.0
+loyalty_severity         = 0.0
 loyalty_reveal_trust     = 0.0
 
 task_progress_milestones = []

@@ -87,18 +87,35 @@ def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id:
         # Recalculate ETAs — freed employees change topology
         from ..config import get_world_config
         recalculate_etas(db, company_id, sim_time, milestones=get_world_config().task_progress_milestones)
-        # Include task title and client name so the agent can see which client's task failed
-        from ..db.models.task import Task
+        # Include operational details so the agent can learn from outcomes
+        from ..db.models.task import Task, TaskAssignment
         from ..db.models.client import Client
+        from ..db.models.employee import Employee
         task_row = db.query(Task).filter(Task.id == result.task_id).one_or_none()
         client_name = None
         task_title = None
+        deadline_info = None
+        assigned_employees = []
+        salary_bump_total = 0
         if task_row:
             task_title = task_row.title
             if task_row.client_id:
                 cl = db.query(Client).filter(Client.id == task_row.client_id).one_or_none()
                 if cl:
                     client_name = cl.name
+            # Deadline vs completion info
+            if task_row.deadline and task_row.completed_at:
+                hours_diff = (task_row.deadline - task_row.completed_at).total_seconds() / 3600
+                deadline_info = f"{'ahead by' if hours_diff >= 0 else 'late by'} {abs(hours_diff):.0f}h"
+            # Which employees were assigned + salary bump impact
+            assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id == result.task_id).all()
+            wc = get_world_config()
+            for a in assignments:
+                emp = db.query(Employee).filter(Employee.id == a.employee_id).one_or_none()
+                if emp:
+                    bump = int(emp.salary_cents * wc.salary_bump_pct) if result.success else 0
+                    salary_bump_total += bump
+                    assigned_employees.append(emp.name)
         return {
             "type": "task_completed",
             "task_id": str(result.task_id),
@@ -108,6 +125,9 @@ def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id:
             "funds_delta": result.funds_delta,
             "listed_reward": result.listed_reward,
             "trust_delta": result.trust_delta,
+            "deadline_margin": deadline_info,
+            "employees_assigned": len(assigned_employees),
+            "salary_bump_total_cents": salary_bump_total,
             "bankrupt": result.bankrupt,
         }
 

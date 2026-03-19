@@ -65,6 +65,10 @@ def _rates_by_employee_domain(rates):
         m[(r.employee_id, r.domain)] = r.rate_domain_per_hour
     return m
 
+_EFFICIENT_TEAM_SIZE = 4       # first N employees at full rate
+_OVERCROWD_PENALTY = Decimal("0")  # employees beyond N contribute nothing (pure overhead)
+
+
 def _effective_rate_for_task_domain(*, task_id, domain, assignments,
                                     assignment_counts, base_rates):
     """Compute effective rate for one task+domain.
@@ -72,8 +76,14 @@ def _effective_rate_for_task_domain(*, task_id, domain, assignments,
     Throughput split uses sqrt(k) instead of k: two concurrent tasks each run at
     1/sqrt(2) ≈ 71% speed, not 50%. This makes mild parallelism (2-3 tasks)
     more efficient than strict sequential.
+
+    Brooks's Law: first 4 employees contribute full rate. Beyond that,
+    additional employees contribute at 25% (overcrowding overhead).
     """
-    total = Decimal("0")
+    from math import sqrt
+
+    # Collect (employee_id, effective_base) for this task, sorted best-first
+    contributions = []
     for a in assignments:
         if a.task_id != task_id:
             continue
@@ -81,8 +91,18 @@ def _effective_rate_for_task_domain(*, task_id, domain, assignments,
         if k <= 0:
             continue
         base = base_rates.get((a.employee_id, domain), Decimal("0"))
-        from math import sqrt
-        total += base / Decimal(str(round(sqrt(k), 6)))
+        split_rate = base / Decimal(str(round(sqrt(k), 6)))
+        contributions.append(split_rate)
+
+    # Sort best contributors first so they get full rate
+    contributions.sort(reverse=True)
+
+    total = Decimal("0")
+    for i, rate in enumerate(contributions):
+        if i < _EFFICIENT_TEAM_SIZE:
+            total += rate
+        else:
+            total += rate * _OVERCROWD_PENALTY
     return total
 
 def _weighted_ratio_from_rows(rows, *, task_id_label):
@@ -244,13 +264,23 @@ def compute_effective_rates(db, company_id):
 
     out = []
     for req in requirements:
-        total = Decimal("0")
+        from math import sqrt
+        contributions = []
         for a in assignments_by_task.get(req.task_id, []):
             k = assignment_counts.get(a.employee_id, 0)
             if k <= 0:
                 continue
             base = base_rates.get((a.employee_id, req.domain), Decimal("0"))
-            total += base / Decimal(k)
+            split_rate = base / Decimal(str(round(sqrt(k), 6)))
+            contributions.append(split_rate)
+
+        contributions.sort(reverse=True)
+        total = Decimal("0")
+        for i, rate in enumerate(contributions):
+            if i < _EFFICIENT_TEAM_SIZE:
+                total += rate
+            else:
+                total += rate * _OVERCROWD_PENALTY
 
         out.append(EffectiveRate(
             task_id=req.task_id,

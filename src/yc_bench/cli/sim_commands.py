@@ -95,58 +95,101 @@ def sim_init(
 
 @sim_app.command("resume")
 def sim_resume():
-    """Advance simulation to the next queued event checkpoint and return wake results."""
+    """Advance simulation to the next actionable event (task completion, bankruptcy, or horizon end).
+
+    Automatically skips past payroll-only events so each resume lands on
+    something the agent can act on.
+    """
     with get_db() as db:
         sim_state = db.query(SimState).first()
         if sim_state is None:
             error_output("No simulation found. Run `yc-bench sim init` first.")
         company = db.query(Company).filter(Company.id == sim_state.company_id).one()
 
-        next_event = fetch_next_event(
-            db=db,
-            company_id=sim_state.company_id,
-            up_to=sim_state.horizon_end,
-        )
+        # Block resume if no active tasks — forces the agent to accept/dispatch first
+        from ..db.models.task import Task, TaskStatus
+        active_count = db.query(Task).filter(
+            Task.company_id == sim_state.company_id,
+            Task.status == TaskStatus.ACTIVE,
+        ).count()
+        if active_count == 0:
+            error_output(
+                "No active tasks. Accept and dispatch a task before calling sim resume. "
+                "Use: market browse → task accept → task dispatch → sim resume"
+            )
 
-        if next_event is None:
-            terminal_reason = None
-            bankrupt = company.funds_cents < 0
-            horizon_reached = sim_state.sim_time >= sim_state.horizon_end
-            if bankrupt:
-                terminal_reason = "bankruptcy"
-            elif horizon_reached:
-                terminal_reason = "horizon_end"
+        # Keep advancing until we hit an actionable event (task completion,
+        # bankruptcy, horizon end) or run out of events.
+        # Only fast-forward past payrolls when there are active tasks to wait for.
+        all_wake_events = []
+        total_balance_delta = 0
+        total_payrolls = 0
+        total_events = 0
+        last_checkpoint_type = None
 
-            json_output({
-                "ok": True,
-                "message": "no_pending_events",
-                "old_sim_time": sim_state.sim_time.isoformat(),
-                "new_sim_time": sim_state.sim_time.isoformat(),
-                "events_processed": 0,
-                "payrolls_applied": 0,
-                "balance_delta": 0,
-                "wake_events": [],
-                "bankrupt": bankrupt,
-                "horizon_reached": horizon_reached,
-                "terminal_reason": terminal_reason,
-            })
-            return
+        while True:
+            next_event = fetch_next_event(
+                db=db,
+                company_id=sim_state.company_id,
+                up_to=sim_state.horizon_end,
+            )
 
-        checkpoint_type = next_event.event_type.value
-        result = advance_time(
-            db=db,
-            company_id=sim_state.company_id,
-            target_time=next_event.scheduled_at,
-        )
+            if next_event is None:
+                break
+
+            last_checkpoint_type = next_event.event_type.value
+            result = advance_time(
+                db=db,
+                company_id=sim_state.company_id,
+                target_time=next_event.scheduled_at,
+            )
+
+            total_events += result.events_processed
+            total_payrolls += result.payrolls_applied
+            total_balance_delta += result.balance_delta
+            all_wake_events.extend(result.wake_events)
+
+            # Stop on terminal or actionable events
+            if result.bankrupt or result.horizon_reached:
+                break
+            if result.wake_events:
+                # Has task completions or other actionable events
+                break
+
+            # Only fast-forward past payrolls if there are active tasks waiting.
+            # If no active tasks, stop here so the agent can accept new work.
+            active_count = db.query(Task).filter(
+                Task.company_id == sim_state.company_id,
+                Task.status == TaskStatus.ACTIVE,
+            ).count()
+            if active_count == 0:
+                break
+
+            # Reload sim_state for next iteration
+            db.refresh(sim_state)
+
+        # Reload final state
+        db.refresh(sim_state)
+        company = db.query(Company).filter(Company.id == sim_state.company_id).one()
 
         terminal_reason = None
-        if result.bankrupt:
+        bankrupt = company.funds_cents < 0
+        horizon_reached = sim_state.sim_time >= sim_state.horizon_end
+        if bankrupt:
             terminal_reason = "bankruptcy"
-        elif result.horizon_reached:
+        elif horizon_reached:
             terminal_reason = "horizon_end"
 
-        payload = result.__dict__.copy()
-        payload["ok"] = True
-        payload["checkpoint_event_type"] = checkpoint_type
-        payload["terminal_reason"] = terminal_reason
-        json_output(payload)
+        json_output({
+            "ok": True,
+            "old_sim_time": sim_state.sim_time.isoformat(),
+            "new_sim_time": sim_state.sim_time.isoformat(),
+            "checkpoint_event_type": last_checkpoint_type,
+            "events_processed": total_events,
+            "payrolls_applied": total_payrolls,
+            "balance_delta": total_balance_delta,
+            "wake_events": all_wake_events,
+            "bankrupt": bankrupt,
+            "horizon_reached": horizon_reached,
+            "terminal_reason": terminal_reason,
+        })

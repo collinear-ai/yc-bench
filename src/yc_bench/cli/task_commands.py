@@ -39,22 +39,18 @@ def _compute_deadline(accepted_at: datetime, max_domain_qty: float, cfg=None) ->
 
 @task_app.command("accept")
 def task_accept(
-    task_id: str = typer.Option(..., "--task-id", help="UUID of the task to accept"),
+    task_id: str = typer.Option(..., "--task-id", help="Task UUID or title (e.g. Task-42)"),
 ):
     """Accept a market task: transition to planned, assign to company, generate replacement."""
-    try:
-        tid = UUID(task_id)
-    except ValueError:
-        error_output(f"Invalid UUID: {task_id}")
-
     with get_db() as db:
         sim_state = db.query(SimState).first()
         if sim_state is None:
             error_output("No simulation found. Run `yc-bench sim init` first.")
 
-        task = db.query(Task).filter(Task.id == tid).one_or_none()
+        task = _resolve_task(db, task_id)
         if task is None:
-            error_output(f"Task {task_id} not found.")
+            error_output(f"Task '{task_id}' not found.")
+        tid = task.id
         if task.status != TaskStatus.MARKET:
             error_output(f"Task {task_id} is not in market status (current: {task.status.value}).")
 
@@ -106,12 +102,20 @@ def task_accept(
         # Store advertised reward before any dispute can alter it
         task.advertised_reward_cents = task.reward_funds_cents
 
-        # Scope creep: RAT clients inflate required_qty after accept
+        # Scope creep: RAT clients inflate required_qty after accept.
+        # Minimum inflation ensures ALL RAT tasks exceed deadline (which was
+        # computed from pre-creep qty). The agent can't tell from the deadline
+        # alone — the trap only springs after accept.
         if task.client_id is not None:
             client_row = db.query(Client).filter(Client.id == task.client_id).one_or_none()
             if client_row and client_row.loyalty < -0.3:
-                intensity = abs(client_row.loyalty)  # pure loyalty — no trust gating
+                intensity = abs(client_row.loyalty)
                 inflation = _cfg.scope_creep_max * intensity
+                # Ensure enough inflation to bust the deadline:
+                # deadline_hours = deadline_min_biz_days * work_hours
+                # need inflated_qty / effective_rate > deadline_hours
+                # Conservative: at least 130% inflation so even small tasks fail
+                inflation = max(1.3, inflation)
                 for r in reqs:
                     inflated = float(r.required_qty) * (1 + inflation)
                     r.required_qty = int(min(25000, max(200, inflated)))
@@ -186,177 +190,158 @@ def task_accept(
         db.flush()
 
         json_output({
-            "task_id": str(task.id),
+            "task_id": task.title,
             "status": task.status.value,
             "accepted_at": accepted_at.isoformat(),
             "deadline": deadline.isoformat(),
-            "replacement_task_id": str(replacement_row.id),
+            "replacement_task_id": replacement_row.title,
         })
+
+
+def _resolve_employee(db, company_id, identifier: str):
+    """Resolve employee by UUID or name (e.g. 'Emp_1')."""
+    try:
+        eid = UUID(identifier)
+        return db.query(Employee).filter(Employee.id == eid, Employee.company_id == company_id).one_or_none()
+    except ValueError:
+        pass
+    # Try name lookup
+    return db.query(Employee).filter(Employee.name == identifier, Employee.company_id == company_id).one_or_none()
+
+
+def _resolve_task(db, identifier: str):
+    """Resolve task by UUID or title (e.g. 'Task-42').
+
+    If multiple tasks share the same title (original + replacement), prefer
+    the one that's actionable (market/planned/active) over completed ones.
+    """
+    try:
+        tid = UUID(identifier)
+        return db.query(Task).filter(Task.id == tid).one_or_none()
+    except ValueError:
+        pass
+    # Title lookup — prefer actionable tasks over completed ones
+    matches = db.query(Task).filter(Task.title == identifier).all()
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    # Prefer: market > planned > active > completed
+    priority = {TaskStatus.MARKET: 0, TaskStatus.PLANNED: 1, TaskStatus.ACTIVE: 2}
+    matches.sort(key=lambda t: priority.get(t.status, 9))
+    return matches[0]
 
 
 @task_app.command("assign")
 def task_assign(
-    task_id: str = typer.Option(..., "--task-id", help="UUID of the task"),
-    employee_id: str = typer.Option(..., "--employee-id", help="UUID of the employee"),
+    task_id: str = typer.Option(..., "--task-id", help="Task UUID or title (e.g. Task-42)"),
+    employees: str = typer.Option(..., "--employees", help="Comma-separated employee names (e.g. Emp_1,Emp_4,Emp_7)"),
 ):
-    """Assign an employee to a task."""
-    try:
-        tid = UUID(task_id)
-        eid = UUID(employee_id)
-    except ValueError:
-        error_output("Invalid UUID provided.")
-
+    """Assign one or more employees to a task."""
+    employee_id = [e.strip() for e in employees.split(",") if e.strip()]
     with get_db() as db:
         sim_state = db.query(SimState).first()
         if sim_state is None:
             error_output("No simulation found.")
 
-        task = db.query(Task).filter(Task.id == tid).one_or_none()
+        task = _resolve_task(db, task_id)
         if task is None:
-            error_output(f"Task {task_id} not found.")
+            error_output(f"Task '{task_id}' not found.")
+        tid = task.id
         if task.status not in (TaskStatus.PLANNED, TaskStatus.ACTIVE):
             error_output(f"Task {task_id} must be planned or active to assign (current: {task.status.value}).")
         if task.company_id != sim_state.company_id:
             error_output(f"Task {task_id} does not belong to your company.")
 
-        employee = db.query(Employee).filter(Employee.id == eid).one_or_none()
-        if employee is None:
-            error_output(f"Employee {employee_id} not found.")
-        if employee.company_id != sim_state.company_id:
-            error_output(f"Employee {employee_id} does not belong to your company.")
+        assigned_names = []
+        for eid_str in employee_id:
+            employee = _resolve_employee(db, sim_state.company_id, eid_str)
+            if employee is None:
+                error_output(f"Employee '{eid_str}' not found.")
+            eid = employee.id
 
-        # Check if already assigned
-        existing = db.query(TaskAssignment).filter(
-            TaskAssignment.task_id == tid,
-            TaskAssignment.employee_id == eid,
-        ).one_or_none()
-        if existing is not None:
-            error_output(f"Employee {employee_id} is already assigned to task {task_id}.")
+            # Skip if already assigned
+            existing = db.query(TaskAssignment).filter(
+                TaskAssignment.task_id == tid,
+                TaskAssignment.employee_id == eid,
+            ).one_or_none()
+            if existing is not None:
+                continue
 
-        assignment = TaskAssignment(
-            task_id=tid,
-            employee_id=eid,
-            assigned_at=sim_state.sim_time,
-        )
-        db.add(assignment)
+            db.add(TaskAssignment(
+                task_id=tid,
+                employee_id=eid,
+                assigned_at=sim_state.sim_time,
+            ))
+            assigned_names.append(employee.name)
+
         db.flush()
 
-        # Recalculate ETAs for all active tasks sharing this employee
+        # Recalculate ETAs for all active tasks sharing these employees
         if task.status == TaskStatus.ACTIVE:
-            emp_assignments = db.query(TaskAssignment).filter(
-                TaskAssignment.employee_id == eid
-            ).all()
             impacted = set()
-            for ea in emp_assignments:
-                t = db.query(Task).filter(Task.id == ea.task_id).one_or_none()
-                if t and t.status == TaskStatus.ACTIVE:
-                    impacted.add(t.id)
+            for eid_str in employee_id:
+                emp = _resolve_employee(db, sim_state.company_id, eid_str)
+                if emp:
+                    for ea in db.query(TaskAssignment).filter(TaskAssignment.employee_id == emp.id).all():
+                        t = db.query(Task).filter(Task.id == ea.task_id).one_or_none()
+                        if t and t.status == TaskStatus.ACTIVE:
+                            impacted.add(t.id)
             if impacted:
                 recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, milestones=_get_world_cfg().task_progress_milestones)
 
         # Return current assignment list
         assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id == tid).all()
-        assignment_list = [
-            {
-                "employee_id": str(a.employee_id),
-                "assigned_at": a.assigned_at.isoformat(),
-            }
-            for a in assignments
-        ]
+        assignment_list = []
+        for a in assignments:
+            emp = db.query(Employee).filter(Employee.id == a.employee_id).one_or_none()
+            assignment_list.append(emp.name if emp else "unknown")
 
         json_output({
-            "task_id": str(task.id),
+            "task_id": task.title,
             "status": task.status.value,
-            "assignments": assignment_list,
+            "newly_assigned": assigned_names,
+            "total_assigned": assignment_list,
         })
 
 
 @task_app.command("assign-all")
 def task_assign_all(
-    task_id: str = typer.Option(..., "--task-id", help="UUID of the task"),
+    task_id: str = typer.Option(..., "--task-id", help="Task UUID or title (e.g. Task-42)"),
 ):
-    """Assign all idle employees to a task."""
-    try:
-        tid = UUID(task_id)
-    except ValueError:
-        error_output(f"Invalid UUID: {task_id}")
-
-    with get_db() as db:
-        sim_state = db.query(SimState).first()
-        if sim_state is None:
-            error_output("No simulation found.")
-
-        task = db.query(Task).filter(Task.id == tid).one_or_none()
-        if task is None:
-            error_output(f"Task {task_id} not found.")
-        if task.status not in (TaskStatus.PLANNED, TaskStatus.ACTIVE):
-            error_output(f"Task {task_id} must be planned or active to assign (current: {task.status.value}).")
-        if task.company_id != sim_state.company_id:
-            error_output(f"Task {task_id} does not belong to your company.")
-
-        employees = db.query(Employee).filter(Employee.company_id == sim_state.company_id).all()
-        assigned_count = 0
-        for emp in employees:
-            existing = db.query(TaskAssignment).filter(
-                TaskAssignment.task_id == tid,
-                TaskAssignment.employee_id == emp.id,
-            ).one_or_none()
-            if existing is not None:
-                continue
-            db.add(TaskAssignment(
-                task_id=tid,
-                employee_id=emp.id,
-                assigned_at=sim_state.sim_time,
-            ))
-            assigned_count += 1
-
-        db.flush()
-
-        assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id == tid).all()
-        json_output({
-            "task_id": str(task.id),
-            "status": task.status.value,
-            "newly_assigned": assigned_count,
-            "total_assigned": len(assignments),
-        })
+    """Disabled — use `task assign --employees Emp_1,Emp_4,Emp_7` to pick specific employees."""
+    error_output(
+        "assign-all is not available. Use `task assign --task-id <ID> --employees Emp_1,Emp_4,Emp_7` to assign specific employees."
+    )
 
 
 @task_app.command("dispatch")
 def task_dispatch(
-    task_id: str = typer.Option(..., "--task-id", help="UUID of the task to dispatch"),
+    task_id: str = typer.Option(..., "--task-id", help="Task UUID or title (e.g. Task-42)"),
 ):
     """Dispatch a planned task to active status."""
-    try:
-        tid = UUID(task_id)
-    except ValueError:
-        error_output(f"Invalid UUID: {task_id}")
-
     with get_db() as db:
         sim_state = db.query(SimState).first()
         if sim_state is None:
             error_output("No simulation found.")
 
-        task = db.query(Task).filter(Task.id == tid).one_or_none()
+        task = _resolve_task(db, task_id)
         if task is None:
-            error_output(f"Task {task_id} not found.")
+            error_output(f"Task '{task_id}' not found.")
+        tid = task.id
         if task.status != TaskStatus.PLANNED:
             error_output(f"Task {task_id} must be planned to dispatch (current: {task.status.value}).")
         if task.company_id != sim_state.company_id:
             error_output(f"Task {task_id} does not belong to your company.")
 
-        # Auto-assign all employees if none are manually assigned.
-        # If the agent pre-assigned specific employees, respect that choice.
+        # Require explicit assignment before dispatch
         existing_count = db.query(func.count(TaskAssignment.employee_id)).filter(
             TaskAssignment.task_id == tid
         ).scalar() or 0
         if existing_count == 0:
-            employees = db.query(Employee).filter(Employee.company_id == sim_state.company_id).all()
-            for emp in employees:
-                db.add(TaskAssignment(
-                    task_id=tid,
-                    employee_id=emp.id,
-                    assigned_at=sim_state.sim_time,
-                ))
+            error_output(
+                "No employees assigned. Use `task assign-all` or `task assign --employee-id Emp_1` first."
+            )
             db.flush()
 
         # Transition to active
@@ -378,13 +363,17 @@ def task_dispatch(
                     impacted.add(peer_task.id)
         recalculate_etas(db, sim_state.company_id, sim_state.sim_time, impacted, milestones=_get_world_cfg().task_progress_milestones)
 
-        final_count = db.query(func.count(TaskAssignment.employee_id)).filter(
-            TaskAssignment.task_id == tid
-        ).scalar() or 0
+        assigned = db.query(TaskAssignment).filter(TaskAssignment.task_id == tid).all()
+        assigned_names = []
+        for a in assigned:
+            emp = db.query(Employee).filter(Employee.id == a.employee_id).one_or_none()
+            if emp:
+                assigned_names.append(emp.name)
         json_output({
-            "task_id": str(task.id),
+            "task_id": task.title,
             "status": task.status.value,
-            "assignment_count": final_count,
+            "assignment_count": len(assigned),
+            "assigned_employees": assigned_names,
         })
 
 
@@ -430,7 +419,7 @@ def task_list(
                     client_name = client.name
 
             results.append({
-                "task_id": str(task.id),
+                "task_id": task.title,
                 "title": task.title,
                 "status": task.status.value,
                 "client_name": client_name,
@@ -447,18 +436,14 @@ def task_list(
 
 @task_app.command("inspect")
 def task_inspect(
-    task_id: str = typer.Option(..., "--task-id", help="UUID of the task to inspect"),
+    task_id: str = typer.Option(..., "--task-id", help="Task UUID or title (e.g. Task-42)"),
 ):
     """Inspect detailed task information."""
-    try:
-        tid = UUID(task_id)
-    except ValueError:
-        error_output(f"Invalid UUID: {task_id}")
-
     with get_db() as db:
-        task = db.query(Task).filter(Task.id == tid).one_or_none()
+        task = _resolve_task(db, task_id)
         if task is None:
-            error_output(f"Task {task_id} not found.")
+            error_output(f"Task '{task_id}' not found.")
+        tid = task.id
 
         # Requirements
         reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == tid).all()
@@ -477,8 +462,7 @@ def task_inspect(
         for a in assignments_raw:
             emp = db.query(Employee).filter(Employee.id == a.employee_id).one_or_none()
             assignments.append({
-                "employee_id": str(a.employee_id),
-                "employee_name": emp.name if emp else "unknown",
+                "employee": emp.name if emp else "unknown",
                 "assigned_at": a.assigned_at.isoformat(),
             })
 
@@ -494,7 +478,7 @@ def task_inspect(
                 client_name = client_row.name
 
         json_output({
-            "task_id": str(task.id),
+            "task_id": task.title,
             "title": task.title,
             "status": task.status.value,
             "client_name": client_name,
@@ -515,23 +499,19 @@ def task_inspect(
 
 @task_app.command("cancel")
 def task_cancel(
-    task_id: str = typer.Option(..., "--task-id", help="UUID of the task to cancel"),
+    task_id: str = typer.Option(..., "--task-id", help="Task UUID or title (e.g. Task-42)"),
     reason: str = typer.Option(..., "--reason", help="Reason for cancellation"),
 ):
     """Cancel a task and apply prestige penalty."""
-    try:
-        tid = UUID(task_id)
-    except ValueError:
-        error_output(f"Invalid UUID: {task_id}")
-
     with get_db() as db:
         sim_state = db.query(SimState).first()
         if sim_state is None:
             error_output("No simulation found.")
 
-        task = db.query(Task).filter(Task.id == tid).one_or_none()
+        task = _resolve_task(db, task_id)
         if task is None:
-            error_output(f"Task {task_id} not found.")
+            error_output(f"Task '{task_id}' not found.")
+        tid = task.id
         if task.status not in (TaskStatus.PLANNED, TaskStatus.ACTIVE):
             error_output(f"Task {task_id} cannot be cancelled (current: {task.status.value}).")
         if task.company_id != sim_state.company_id:
@@ -608,7 +588,7 @@ def task_cancel(
         db.flush()
 
         json_output({
-            "task_id": str(task.id),
+            "task_id": task.title,
             "status": task.status.value,
             "reason": reason,
             "cancel_penalty_per_domain": float(cancel_penalty),
