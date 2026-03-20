@@ -31,7 +31,6 @@ from .eta import recalculate_etas
 from .events import consume_event, fetch_next_event, insert_event
 from .handlers.bankruptcy import handle_bankruptcy
 from .handlers.horizon_end import handle_horizon_end
-from .handlers.payment_dispute import handle_payment_dispute
 from .handlers.task_complete import handle_task_complete
 from .handlers.task_half import handle_task_half
 from .progress import flush_progress
@@ -128,16 +127,6 @@ def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id:
             "deadline_margin": deadline_info,
             "employees_assigned": len(assigned_employees),
             "salary_bump_total_cents": salary_bump_total,
-            "bankrupt": result.bankrupt,
-        }
-
-    elif event.event_type == EventType.PAYMENT_DISPUTE:
-        result = handle_payment_dispute(db, event, sim_time)
-        return {
-            "type": "payment_dispute",
-            "task_id": str(result.task_id),
-            "clawback_cents": result.clawback_cents,
-            "client_name": event.payload.get("client_name", "unknown"),
             "bankrupt": result.bankrupt,
         }
 

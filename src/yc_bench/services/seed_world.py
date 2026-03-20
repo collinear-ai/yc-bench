@@ -58,8 +58,11 @@ def _seed_company_prestige(db, company, cfg):
         )
 
 
+_FIXED_WORLD_SEED = 1  # employees + clients identical across all run seeds (2 RATs: Prism Analytics, Cortex Intelligence)
+
+
 def _seed_employees(db, company, req):
-    generated = generate_employees(run_seed=req.run_seed, count=req.employee_count, cfg=req.cfg)
+    generated = generate_employees(run_seed=_FIXED_WORLD_SEED, count=req.employee_count, cfg=req.cfg)
     for emp in generated:
         employee = Employee(
             id=uuid4(),
@@ -83,7 +86,7 @@ def _seed_employees(db, company, req):
 
 def _seed_clients(db, company, req):
     """Create Client rows and ClientTrust rows (all starting at 0.0)."""
-    generated = generate_clients(run_seed=req.run_seed, count=req.cfg.num_clients, cfg=req.cfg)
+    generated = generate_clients(run_seed=_FIXED_WORLD_SEED, count=req.cfg.num_clients, cfg=req.cfg)
     clients = []
     for gc in generated:
         client = Client(id=uuid4(), name=gc.name, reward_multiplier=gc.reward_multiplier,
