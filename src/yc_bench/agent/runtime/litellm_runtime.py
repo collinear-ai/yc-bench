@@ -17,6 +17,7 @@ from ..tools.run_command_schema import normalize_result
 logger = logging.getLogger(__name__)
 
 litellm.suppress_debug_info = True
+litellm.drop_params = True  # silently drop unsupported params (e.g. tool_choice for mini/nano models)
 
 # Tool schema passed to the LLM on every call
 _RUN_COMMAND_TOOL = {

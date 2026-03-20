@@ -1,11 +1,12 @@
 #!/bin/bash
-# Run all models on medium config across seeds 1-3.
-# Usage: bash run_all_models.sh [--seed 1] [--config medium]
-
-set -e
+# Run models on medium config across seeds — PARALLEL across models.
+# Usage:
+#   bash run_all_models.sh                    # all models, seeds 1-2
+#   bash run_all_models.sh --seed "1"         # single seed
+#   bash run_all_models.sh --config medium    # custom config
 
 CONFIG="${CONFIG:-medium}"
-SEEDS="${SEEDS:-1 2 3}"
+SEEDS="1 2"
 
 # Parse optional args
 while [[ $# -gt 0 ]]; do
@@ -16,59 +17,71 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Direct API models
-DIRECT_MODELS=(
+# Models to run (direct API)
+MODELS=(
     "openai/gpt-5.4"
     "openai/gpt-5.4-mini"
     "openai/gpt-5.4-nano"
     "gemini/gemini-3.1-pro-preview"
     "gemini/gemini-3-flash-preview"
-    "anthropic/claude-opus-4-6"
-    "anthropic/claude-sonnet-4-6"
 )
 
-# OpenRouter models
-OPENROUTER_MODELS=(
-    "openrouter/qwen/qwen3.5-397b-a17b"
-    "openrouter/minimax/minimax-m2.7"
-    "openrouter/deepseek/deepseek-v3.2"
-    "openrouter/z-ai/glm-5"
-    "openrouter/moonshotai/kimi-k2.5"
-    "openrouter/x-ai/grok-4.20-beta"
-)
-
-ALL_MODELS=("${DIRECT_MODELS[@]}" "${OPENROUTER_MODELS[@]}")
-
-echo "=== YC-Bench Full Run ==="
+echo "=== YC-Bench Experiment Run (PARALLEL) ==="
 echo "Config: $CONFIG"
 echo "Seeds: $SEEDS"
-echo "Models: ${#ALL_MODELS[@]}"
+echo "Models: ${#MODELS[@]}"
 echo ""
 
-# Run all LLM models
-for model in "${ALL_MODELS[@]}"; do
-    for seed in $SEEDS; do
-        # Derive DB name from model string (replace / with _)
-        db_name=$(echo "$model" | tr '/' '_')
-        db_path="db/${CONFIG}_${seed}_${db_name}.db"
+mkdir -p db results plots
 
-        # Skip if result already exists
+PIDS=()
+LABELS=()
+
+for model in "${MODELS[@]}"; do
+    for seed in $SEEDS; do
+        db_name=$(echo "$model" | tr '/' '_')
         result_file="results/yc_bench_result_${CONFIG}_${seed}_${db_name}.json"
+
         if [[ -f "$result_file" ]]; then
             echo "  SKIP $model seed=$seed (result exists)"
             continue
         fi
 
-        echo "  RUN  $model | $CONFIG seed=$seed"
+        echo "  LAUNCH $model | $CONFIG seed=$seed"
+        db_path="db/${CONFIG}_${seed}_${db_name}.db"
         rm -f "$db_path"
+
         uv run yc-bench run \
             --model "$model" \
             --seed "$seed" \
             --config "$CONFIG" \
             --no-live \
-            2>&1 | tail -3
-        echo ""
+            > "logs/${db_name}_seed${seed}.log" 2>&1 &
+
+        PIDS+=($!)
+        LABELS+=("$model seed=$seed")
     done
 done
 
-echo "=== All runs complete ==="
+echo ""
+echo "Launched ${#PIDS[@]} runs in parallel. Waiting..."
+echo ""
+
+# Wait for all and report
+FAILED=0
+for i in "${!PIDS[@]}"; do
+    wait "${PIDS[$i]}"
+    EXIT_CODE=$?
+    if [[ $EXIT_CODE -eq 0 ]]; then
+        echo "  DONE ${LABELS[$i]}"
+    else
+        echo "  FAIL ${LABELS[$i]} (exit $EXIT_CODE)"
+        FAILED=$((FAILED + 1))
+    fi
+done
+
+echo ""
+echo "=== Complete: $((${#PIDS[@]} - FAILED)) succeeded, $FAILED failed ==="
+echo ""
+echo "Plot results with:"
+echo "  uv run python scripts/plot_run.py results/yc_bench_result_${CONFIG}_*.json"

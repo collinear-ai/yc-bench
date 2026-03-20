@@ -1,19 +1,22 @@
-# medium — Can the agent detect and avoid adversarial clients?
+# medium — Can the agent manage employees efficiently and navigate adversarial clients?
 #
-# The environment is survivable for any competent agent. The differentiator
-# is the client trust/loyalty system: ~30% of clients are hidden RATs that
-# silently inflate work (scope creep) and claw back payments (disputes).
+# Primary differentiator: PAYROLL GROWTH from employee assignment.
+# Assign-all (8 emp) grows payroll ~2.7× faster than selective (3 emp).
+# Over 12 months this creates a $100K+ gap in profitability.
 #
-# RAT tasks look identical to normal tasks. The only way to detect them is
-# by checking `client history` and noticing listed vs received discrepancies.
+# Secondary differentiator: RAT CLIENTS (~35% of clients).
+# RAT tasks have scope creep that causes deadline failures.
+# RATs offer top-tier rewards to attract the greedy bot.
+# Smart agents can detect RATs via `client history` after initial failures.
 #
-# The greedy bot can't detect RATs — it picks tasks blindly and bleeds money.
-# A smart LLM that checks history and avoids RATs should clearly outperform.
+# Tertiary differentiator: TRUST BUILDING.
+# Focusing on fewer clients builds trust → work reduction → faster tasks.
+# Spreading across many clients erodes trust via cross-client decay.
 
 extends = "default"
 
 name        = "medium"
-description = "1-year medium. Tests client trust awareness — can the agent detect adversarial clients?"
+description = "1-year medium. Tests employee efficiency, client trust, and adversarial client detection."
 
 [sim]
 horizon_years = 1
@@ -29,26 +32,26 @@ num_clients              = 6
 deadline_qty_per_day = 150.0
 deadline_min_biz_days = 7
 penalty_fail_multiplier   = 1.0
-penalty_fail_funds_pct    = 0.25   # failing costs 25% of advertised reward
+penalty_fail_funds_pct    = 0.35   # failing costs 35% of advertised reward
 penalty_cancel_multiplier = 1.5
 # Salary bumps: each completed task raises salary for ALL assigned employees.
-# Assign-all (8 bumps/task) compounds payroll fast → unsustainable.
-# Selective assignment (3-4/task) grows slower → survivable for smart agents.
+# Assign-all (8 bumps/task) grows payroll ~2.7× faster than selective (3/task).
+# This is the PRIMARY differentiator between bot and smart agents.
 salary_bump_pct = 0.01
 reward_prestige_scale = 0.30
 prestige_decay_per_day = 0.0
 
 # --- Client trust ---
-trust_build_rate         = 5.0
+trust_build_rate         = 5.0    # ~5 tasks to reach significant trust
 trust_fragility          = 0.3
 trust_focus_pressure     = 0.3
 trust_reward_ceiling     = 2.6
-trust_work_reduction_max = 0.50
+trust_work_reduction_max = 0.50   # 50% less work at max trust
 trust_gating_fraction    = 0.30
-trust_gated_reward_boost = 0.50    # trust-4 task pays 3× base (was 1.6× at 0.15)
+trust_gated_reward_boost = 0.0    # no reward distortion
 
 # --- Client loyalty ---
-loyalty_rat_fraction     = 0.20
+loyalty_rat_fraction     = 0.35
 loyalty_severity         = 1.0
 loyalty_reveal_trust     = 0.0
 
