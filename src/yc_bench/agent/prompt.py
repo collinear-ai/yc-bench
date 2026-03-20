@@ -31,7 +31,6 @@ Run multiple tasks concurrently when possible. Accept → assign → dispatch a 
 - `yc-bench client list` — clients with trust levels
 - `yc-bench client history` — per-client success/failure rates
 - `yc-bench finance ledger` — financial history
-- `yc-bench scratchpad read` — your persistent notes
 
 ### Act
 - `yc-bench task accept --task-id Task-42` — accept from market
@@ -182,7 +181,7 @@ def build_initial_user_prompt(
             "",
             f"You went bankrupt in episode {episode - 1}. The simulation has been reset,",
             "but your **scratchpad notes from the previous episode are preserved**.",
-            "Read your scratchpad (`yc-bench scratchpad read`) to review your notes",
+            "Check your scratchpad notes for strategy from the previous episode.",
             "and learn from past mistakes before taking action.",
             "",
         ])
