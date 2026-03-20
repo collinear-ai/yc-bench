@@ -1222,6 +1222,61 @@ with tab_world:
 
 
 
+    # ── ASSIGNMENT PATTERN ──
+    if state.get("funds_times"):
+        st.markdown('<div class="section-header">Assignment Pattern</div>', unsafe_allow_html=True)
+        try:
+            from yc_bench.db.models.task import TaskAssignment
+            from sqlalchemy import func as sqla_func
+            with session_scope(factory) as db2:
+                sim2 = db2.query(SimState).first()
+                if sim2:
+                    completed = db2.query(Task).filter(
+                        Task.company_id == sim2.company_id,
+                        Task.completed_at.isnot(None),
+                    ).order_by(Task.completed_at).all()
+                    if completed:
+                        assign_times = []
+                        assign_counts = []
+                        for t in completed:
+                            cnt = db2.query(sqla_func.count(TaskAssignment.employee_id)).filter(
+                                TaskAssignment.task_id == t.id
+                            ).scalar()
+                            assign_times.append(t.completed_at)
+                            assign_counts.append(cnt)
+                        fig_assign = go.Figure()
+                        fig_assign.add_trace(go.Scatter(
+                            x=assign_times, y=assign_counts,
+                            mode="markers", name="employees/task",
+                            marker=dict(color=ACCENT_GREEN, size=6, opacity=0.6),
+                        ))
+                        fig_assign.add_hline(y=4, line_dash="dash", line_color="gray", opacity=0.3,
+                                            annotation_text="efficient (4)")
+                        fig_assign.update_layout(**_chart_layout(
+                            title="Employees Assigned Per Task", height=250,
+                            yaxis_title="Count", show_legend=False))
+                        st.plotly_chart(fig_assign, use_container_width=True, config={"displayModeBar": False})
+        except Exception:
+            pass
+
+    # ── SCRATCHPAD ──
+    try:
+        from yc_bench.db.models.scratchpad import Scratchpad
+        with session_scope(factory) as db3:
+            sim3 = db3.query(SimState).first()
+            if sim3:
+                sp = db3.query(Scratchpad).filter(Scratchpad.company_id == sim3.company_id).one_or_none()
+                if sp and sp.content:
+                    st.markdown('<div class="section-header">Scratchpad</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div style="background:#14161a;border:1px solid #2a2d35;border-radius:8px;'
+                        f'padding:12px;font-size:0.8rem;color:#c0c0c0;white-space:pre-wrap;">'
+                        f'{_esc(sp.content)}</div>',
+                        unsafe_allow_html=True)
+    except Exception:
+        pass
+
+
 # Auto-refresh
 time.sleep(5)
 st.rerun()

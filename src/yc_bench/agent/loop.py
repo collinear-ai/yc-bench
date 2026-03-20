@@ -210,11 +210,14 @@ def run_agent_loop(
             if run_state.terminal:
                 logger.info("Terminal after turn %d: %s", turn_num, reason)
 
+        raw = getattr(result, "raw_result", {}) or {}
         run_state.record_turn(
             user_input=user_input,
             agent_output=agent_output,
             commands_executed=commands_executed,
             turn_cost_usd=getattr(result, "turn_cost_usd", 0.0),
+            prompt_tokens=raw.get("prompt_tokens", 0),
+            completion_tokens=raw.get("completion_tokens", 0),
         )
 
         if on_turn is not None:

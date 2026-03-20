@@ -20,6 +20,9 @@ class TranscriptEntry:
     user_input: str
     agent_output: str
     commands_executed: List[str] = field(default_factory=list)
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cost_usd: float = 0.0
 
 
 @dataclass
@@ -48,7 +51,8 @@ class RunState:
     def start(self) -> None:
         self.started_at = datetime.now(timezone.utc).isoformat()
 
-    def record_turn(self, user_input: str, agent_output: str, commands_executed: List[str] | None = None, turn_cost_usd: float = 0.0) -> None:
+    def record_turn(self, user_input: str, agent_output: str, commands_executed: List[str] | None = None,
+                    turn_cost_usd: float = 0.0, prompt_tokens: int = 0, completion_tokens: int = 0) -> None:
         self.turn_count += 1
         self.total_cost_usd += turn_cost_usd
         self.transcript.append(TranscriptEntry(
@@ -57,6 +61,9 @@ class RunState:
             user_input=user_input,
             agent_output=agent_output,
             commands_executed=commands_executed or [],
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=turn_cost_usd,
         ))
 
     def mark_terminal(self, reason: TerminalReason, detail: str = "") -> None:
@@ -87,6 +94,9 @@ class RunState:
                     "user_input": t.user_input,
                     "agent_output": t.agent_output,
                     "commands_executed": t.commands_executed,
+                    "prompt_tokens": t.prompt_tokens,
+                    "completion_tokens": t.completion_tokens,
+                    "cost_usd": t.cost_usd,
                 }
                 for t in self.transcript
             ],
@@ -139,6 +149,9 @@ class RunState:
                     "user_input": t.user_input,
                     "agent_output": t.agent_output,
                     "commands_executed": t.commands_executed,
+                    "prompt_tokens": t.prompt_tokens,
+                    "completion_tokens": t.completion_tokens,
+                    "cost_usd": t.cost_usd,
                 }
                 for t in self.transcript
             ]

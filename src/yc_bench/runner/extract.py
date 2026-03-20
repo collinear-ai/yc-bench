@@ -6,13 +6,18 @@ from uuid import UUID
 
 
 def extract_time_series(db_factory, company_id: UUID) -> Dict[str, Any]:
-    """Query the DB and return structured time-series for funds, prestige, tasks, ledger."""
+    """Query the DB and return all structured data for analysis and plotting."""
     with db_factory() as db:
         funds = _extract_funds(db, company_id)
         prestige = _extract_prestige(db, company_id)
         tasks = _extract_tasks(db, company_id)
         ledger = _extract_ledger(db, company_id)
         client_trust = _extract_client_trust(db, company_id)
+        employees = _extract_employees(db, company_id)
+        assignments = _extract_assignments(db, company_id)
+        clients = _extract_clients(db, company_id)
+        scratchpad = _extract_scratchpad(db, company_id)
+        config = _extract_config()
 
     return {
         "funds": funds,
@@ -20,7 +25,11 @@ def extract_time_series(db_factory, company_id: UUID) -> Dict[str, Any]:
         "tasks": tasks,
         "ledger": ledger,
         "client_trust": client_trust,
-        "trust_reward_formula": "continuous: work_reduction = 0.40 × trust/5.0; cross_client_decay = 0.03/task; tiers: Standard=[0.7,1.0), Premium=[1.0,1.7), Enterprise=[1.7,2.5]; specialty_bias=0.70; RAT clients: scope_creep + payment_disputes above loyalty_reveal_trust",
+        "employees": employees,
+        "assignments": assignments,
+        "clients": clients,
+        "scratchpad": scratchpad,
+        "config": config,
     }
 
 
@@ -313,6 +322,123 @@ def _extract_tasks(db, company_id: UUID) -> List[Dict[str, Any]]:
             "deadline": t.deadline.isoformat() if t.deadline else None,
             "completed_at": t.completed_at.isoformat() if t.completed_at else None,
             "domains": domains,
+            "success": t.success,
         })
 
     return result
+
+
+def _extract_employees(db, company_id: UUID) -> List[Dict[str, Any]]:
+    """Employee snapshot: current salary, tier, skill rates per domain."""
+    from ..db.models.employee import Employee, EmployeeSkillRate
+
+    employees = db.query(Employee).filter(Employee.company_id == company_id).all()
+    result = []
+    for emp in employees:
+        skills = db.query(EmployeeSkillRate).filter(
+            EmployeeSkillRate.employee_id == emp.id
+        ).all()
+        skill_rates = {
+            (s.domain.value if hasattr(s.domain, "value") else str(s.domain)): round(float(s.rate_domain_per_hour), 4)
+            for s in skills
+        }
+        result.append({
+            "name": emp.name,
+            "tier": emp.tier,
+            "salary_cents": int(emp.salary_cents),
+            "skill_rates": skill_rates,
+        })
+    return result
+
+
+def _extract_assignments(db, company_id: UUID) -> List[Dict[str, Any]]:
+    """Per-task assignment details: which employees were assigned to each task."""
+    from ..db.models.task import Task, TaskAssignment, TaskStatus
+    from ..db.models.employee import Employee
+
+    tasks = (
+        db.query(Task)
+        .filter(
+            Task.company_id == company_id,
+            Task.status != TaskStatus.MARKET,
+        )
+        .order_by(Task.accepted_at)
+        .all()
+    )
+
+    result = []
+    for t in tasks:
+        assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id == t.id).all()
+        emp_names = []
+        for a in assignments:
+            emp = db.query(Employee).filter(Employee.id == a.employee_id).one_or_none()
+            if emp:
+                emp_names.append(emp.name)
+        result.append({
+            "task_title": t.title,
+            "status": t.status.value if hasattr(t.status, "value") else str(t.status),
+            "employees_assigned": emp_names,
+            "num_assigned": len(emp_names),
+            "accepted_at": t.accepted_at.isoformat() if t.accepted_at else None,
+            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+            "success": t.success,
+        })
+    return result
+
+
+def _extract_clients(db, company_id: UUID) -> List[Dict[str, Any]]:
+    """Client info: name, loyalty, specialty domains, final trust level."""
+    from ..db.models.client import Client, ClientTrust
+
+    trust_rows = (
+        db.query(ClientTrust, Client)
+        .join(Client, Client.id == ClientTrust.client_id)
+        .filter(ClientTrust.company_id == company_id)
+        .all()
+    )
+
+    result = []
+    for ct, client in trust_rows:
+        result.append({
+            "name": client.name,
+            "loyalty": round(float(client.loyalty), 4),
+            "is_rat": client.loyalty < -0.3,
+            "tier": client.tier,
+            "specialty_domains": client.specialty_domains or [],
+            "final_trust": round(float(ct.trust_level), 4),
+        })
+    return result
+
+
+def _extract_scratchpad(db, company_id: UUID) -> str | None:
+    """Final scratchpad content."""
+    from ..db.models.scratchpad import Scratchpad
+
+    sp = db.query(Scratchpad).filter(Scratchpad.company_id == company_id).one_or_none()
+    return sp.content if sp and sp.content else None
+
+
+def _extract_config() -> Dict[str, Any]:
+    """Snapshot of active world config for reproducibility."""
+    from ..config import get_world_config
+
+    wc = get_world_config()
+    return {
+        "num_employees": wc.num_employees,
+        "num_clients": wc.num_clients,
+        "initial_funds_cents": wc.initial_funds_cents,
+        "salary_bump_pct": wc.salary_bump_pct,
+        "trust_build_rate": wc.trust_build_rate,
+        "trust_gating_fraction": wc.trust_gating_fraction,
+        "trust_gated_reward_boost": wc.trust_gated_reward_boost,
+        "trust_work_reduction_max": wc.trust_work_reduction_max,
+        "loyalty_rat_fraction": wc.loyalty_rat_fraction,
+        "loyalty_severity": wc.loyalty_severity,
+        "penalty_fail_funds_pct": wc.penalty_fail_funds_pct,
+        "deadline_min_biz_days": wc.deadline_min_biz_days,
+        "deadline_qty_per_day": wc.deadline_qty_per_day,
+        "prestige_decay_per_day": wc.prestige_decay_per_day,
+        "reward_prestige_scale": wc.reward_prestige_scale,
+        "skill_rate_max": wc.skill_rate_max,
+        "market_browse_default_limit": wc.market_browse_default_limit,
+    }
