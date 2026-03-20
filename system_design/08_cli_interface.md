@@ -68,10 +68,14 @@ Returns all employees with tier, salary, and current active task count.
 
 ### Market Commands
 
-#### `market browse [--domain X] [--min-prestige N] [--max-prestige N] [--offset O] [--limit L]`
-Browse available market tasks with optional filters.
+#### `market browse [--domain X] [--reward-min-cents N] [--offset O] [--limit L]`
+Browse available market tasks with optional filters. Results are capped at `market_browse_default_limit` (default 50) per page.
 
-**Design choice**: Filtering and pagination prevent information overload. The agent can focus on tasks matching its current prestige level and strategic goals.
+The browse **auto-filters** by prestige and trust: only tasks the company can actually accept are shown. This means:
+- Per-domain prestige check: all required domains must meet the task's `required_prestige`
+- Trust check: company must have sufficient trust with the task's client
+
+**Design choice**: Auto-filtering prevents the agent from wasting turns trying to accept inaccessible tasks. Pagination (`--offset`) allows browsing beyond the first page.
 
 ### Task Commands
 

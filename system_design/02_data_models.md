@@ -146,11 +146,12 @@ The benchmark uses SQLAlchemy's declarative ORM over SQLite for several reasons:
 |--------|------|-------|
 | `id` | UUID (PK) | Auto-generated |
 | `name` | String(255) | Client company name (e.g. "Nexus AI") |
-| `reward_multiplier` | Float | Hidden per-client bonus [0.7, 2.5], not shown to agent |
+| `reward_multiplier` | Float | Per-client reward factor [0.7, 2.5] (currently unused in reward calculation) |
 | `tier` | String(32) | Agent-visible label: Standard / Premium / Enterprise |
 | `specialty_domains` | JSON | List of 1-2 domain strings (e.g. ["research", "training"]) |
+| `loyalty` | Float | Hidden loyalty score [-1.0, 1.0]. RAT clients (< -0.3) cause scope creep |
 
-**Design choice**: The `reward_multiplier` is hidden from the agent; only `tier` is visible. This prevents trivially optimal strategy (always pick highest multiplier) and requires the agent to experiment and observe payouts.
+**Design choice**: `loyalty` is hidden from the agent. RAT clients secretly inflate task work after acceptance (scope creep), causing deadline failures. The agent must detect RATs by observing per-client failure patterns via `client history`.
 
 ### ClientTrust (`models/client.py`)
 

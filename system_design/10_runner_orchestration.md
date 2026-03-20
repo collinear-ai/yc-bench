@@ -18,7 +18,8 @@ def run_benchmark(args):
     # 2. Initialize database
     engine, factory = init_db(db_path)
 
-    # 3. Seed world
+    # 3. Seed world (employees + clients use fixed seed=1 for consistency;
+    #    only task generation uses the run seed)
     with session_scope(factory) as session:
         seed_world_transactional(session, cfg, args.seed)
 

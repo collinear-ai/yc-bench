@@ -69,14 +69,16 @@ total_payroll = sum(employee.salary_cents for all employees)
 
 ### Salary Bumps
 
-Each completed task increases salaries:
+Each completed task increases salaries by a fixed per-tier amount (linear, not compounding):
 
 ```
+tier_midpoints = {junior: (min+max)/2, mid: (min+max)/2, senior: (min+max)/2}
 for each assigned employee:
-    salary_cents *= 1.01  # 1% increase per completion
+    bump = tier_midpoints[employee.tier] * salary_bump_pct
+    salary_cents += bump  # fixed amount per task
 ```
 
-**Design choice**: Compounding salary increases mean success has a hidden cost. Long-running simulations see payroll grow substantially, creating late-game financial pressure even as task rewards scale with prestige.
+**Design choice**: Linear salary bumps create steady payroll growth without exponential compounding. A junior gets ~$30/task bump, mid ~$70, senior ~$125 (at 1% of tier midpoint). This avoids runaway payroll in the late game while still creating pressure.
 
 ### Failure Penalties
 
