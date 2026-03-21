@@ -72,6 +72,8 @@ def generate_clients(*, run_seed: int, count: int, cfg: WorldConfig) -> list[Gen
         if i < n_rats:
             # RAT: loyalty in [-1.0, -0.3]
             loyalty = round(rng.uniform(-1.0, -0.3), 3)
+            # RATs offer competitive rewards (top 30% range) to attract greedy agents
+            mult = max(mult, cfg.client_reward_mult_high * 0.75)
         else:
             # Non-RAT: loyalty in [-0.3, 1.0]
             loyalty = round(rng.triangular(-0.3, 1.0, cfg.loyalty_mode), 3)

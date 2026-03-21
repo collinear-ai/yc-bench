@@ -110,7 +110,7 @@ def _seed_market_tasks(db, company, req, clients):
     generated = generate_tasks(run_seed=req.run_seed, count=req.market_task_count, cfg=req.cfg,
                                client_specialties=client_specialties,
                                client_reward_mults=client_reward_mults)
-    for task in generated:
+    for slot_idx, task in enumerate(generated):
         client = clients[task.client_index % len(clients)] if clients else None
         task_row = Task(
             id=uuid4(),
@@ -128,6 +128,7 @@ def _seed_market_tasks(db, company, req, clients):
             success=None,
             progress_milestone_pct=0,
             required_trust=task.required_trust,
+            market_slot=slot_idx,
         )
         db.add(task_row)
 
