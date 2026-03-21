@@ -99,6 +99,10 @@ class Task(Base):
         BigInteger,
         nullable=True,
     )
+    market_slot = mapped_column(
+        Integer,
+        nullable=True,
+    )
 
 class TaskRequirement(Base):
     __tablename__ = "task_requirements"

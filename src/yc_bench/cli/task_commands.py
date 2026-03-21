@@ -114,7 +114,7 @@ def task_accept(
         if is_rat:
             intensity = abs(client_row.loyalty)
             inflation = _cfg.scope_creep_max * intensity
-            inflation = max(2.0, inflation)
+            inflation = max(3.0, inflation)
             for r in reqs:
                 inflated = float(r.required_qty) * (1 + inflation)
                 r.required_qty = int(min(25000, max(200, inflated)))
@@ -125,9 +125,14 @@ def task_accept(
         task.accepted_at = accepted_at
         task.deadline = deadline
 
-        # Generate replacement task (inherits same client for stable market distribution)
-        counter = sim_state.replenish_counter
-        sim_state.replenish_counter = counter + 1
+        # Generate replacement task — keyed on market_slot so every model
+        # sees the same replacement for the same task, regardless of accept order.
+        slot = task.market_slot if task.market_slot is not None else 0
+        # Generation = how many times this slot has been replaced before
+        generation = db.query(Task).filter(
+            Task.market_slot == slot,
+            Task.company_id.isnot(None),  # accepted tasks
+        ).count()
 
         # Find the client index for the accepted task
         replaced_client_index = 0
@@ -147,7 +152,7 @@ def task_accept(
 
         replacement = generate_replacement_task(
             run_seed=sim_state.run_seed,
-            replenish_counter=counter,
+            replenish_counter=slot * 1000 + generation,  # deterministic per slot+generation
             replaced_prestige=task.required_prestige,
             replaced_client_index=replaced_client_index,
             cfg=_get_world_cfg(),
@@ -175,6 +180,7 @@ def task_accept(
             success=None,
             progress_milestone_pct=0,
             required_trust=replacement.required_trust,
+            market_slot=slot,
         )
         db.add(replacement_row)
 
