@@ -17,7 +17,6 @@ market_app = typer.Typer(help="Market browsing commands.")
 @market_app.command("browse")
 def market_browse(
     domain: Optional[Domain] = typer.Option(None, "--domain", help="Filter by requirement domain"),
-    required_prestige_lte: Optional[int] = typer.Option(None, "--required-prestige-lte", help="Max required prestige"),
     reward_min_cents: Optional[int] = typer.Option(None, "--reward-min-cents", help="Min reward in cents"),
     limit: Optional[int] = typer.Option(None, "--limit", help="Max results (default from experiment config)"),
     offset: int = typer.Option(0, "--offset", help="Offset for pagination"),
