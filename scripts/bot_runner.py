@@ -327,8 +327,18 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                     TaskRequirement.task_id == task.id
                 ).all()
 
-                # Apply trust work reduction (no reward multiplier)
-                if task.client_id is not None:
+                # Store advertised reward before any modification
+                task.advertised_reward_cents = task.reward_funds_cents
+
+                # Check if RAT client
+                from yc_bench.db.models.client import Client as ClientCheck
+                is_rat = False
+                client_row = db.query(ClientCheck).filter(ClientCheck.id == task.client_id).one_or_none() if task.client_id else None
+                if client_row and client_row.loyalty < -0.3:
+                    is_rat = True
+
+                # Trust work reduction (only for non-RAT clients)
+                if not is_rat and task.client_id is not None:
                     from yc_bench.db.models.client import ClientTrust
                     ct = db.query(ClientTrust).filter(
                         ClientTrust.company_id == company_id,
@@ -337,9 +347,20 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                     trust_level = float(ct.trust_level) if ct else 0.0
                     work_reduction = world_cfg.trust_work_reduction_max * (trust_level / world_cfg.trust_max)
                     for r in reqs:
-                        r.required_qty = int(float(r.required_qty) * (1 - work_reduction))
+                        reduced = int(float(r.required_qty) * (1 - work_reduction))
+                        r.required_qty = max(200, reduced)
 
+                # Compute deadline from current qty (before scope creep)
                 max_domain_qty = max(float(r.required_qty) for r in reqs)
+
+                # Scope creep: RAT clients inflate required_qty AFTER deadline
+                if is_rat:
+                    intensity = abs(client_row.loyalty)
+                    inflation = world_cfg.scope_creep_max * intensity
+                    inflation = max(3.0, inflation)
+                    for r in reqs:
+                        inflated = float(r.required_qty) * (1 + inflation)
+                        r.required_qty = int(min(25000, max(200, inflated)))
 
                 task.status = TaskStatus.PLANNED
                 task.company_id = company_id
