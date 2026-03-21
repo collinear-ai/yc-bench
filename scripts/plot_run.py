@@ -1,187 +1,294 @@
-"""Plot a benchmark run: funds over time, prestige evolution, task outcomes."""
-import os
+"""Plot all statistics from YC-Bench result JSON files.
+
+Usage:
+    uv run python scripts/plot_run.py results/yc_bench_result_medium_1_*.json
+    uv run python scripts/plot_run.py results/some_result.json  # single run
+"""
+from __future__ import annotations
+
+import json
 import sys
-from decimal import Decimal
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import matplotlib.dates as mdates
-import numpy as np
 
-os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/yc_bench")
-sys.path.insert(0, str(Path(__file__).parent))
-
-from src.bench.db.session import build_engine, build_session_factory, session_scope
-from src.bench.db.models.ledger import LedgerEntry, LedgerCategory
-from src.bench.db.models.task import Task, TaskRequirement, TaskStatus
-from src.bench.db.models.company import CompanyPrestige
-
-engine = build_engine()
-factory = build_session_factory(engine)
-
+COLORS = ['#00d4aa', '#ff6b6b', '#4ecdc4', '#ffe66d', '#a29bfe', '#fd79a8', '#6c5ce7', '#00b894']
 DOMAIN_COLORS = {
-    "research":         "#3498db",
-    "inference":        "#9b59b6",
+    "research": "#3498db",
+    "inference": "#9b59b6",
     "data_environment": "#1abc9c",
-    "training":         "#e67e22",
+    "training": "#e67e22",
 }
 
-with session_scope(factory) as db:
-    # --- Ledger: reconstruct running balance ---
-    entries = (
-        db.query(LedgerEntry)
-        .order_by(LedgerEntry.occurred_at)
-        .all()
-    )
-    initial_funds = 25_000_000
-    times, balances, categories = [], [], []
-    running = initial_funds
-    for e in entries:
-        running += int(e.amount_cents)
-        times.append(e.occurred_at)
-        balances.append(running / 100)
-        categories.append(e.category)
 
-    # --- Tasks ---
-    tasks = (
-        db.query(Task)
-        .filter(Task.completed_at.isnot(None))
-        .order_by(Task.completed_at)
-        .all()
-    )
-    task_times, task_rewards, task_success, task_prestige = [], [], [], []
-    for t in tasks:
-        task_times.append(t.completed_at)
-        task_rewards.append(int(t.reward_funds_cents) / 100)
-        task_success.append(t.status == TaskStatus.COMPLETED_SUCCESS)
-        task_prestige.append(t.required_prestige)
+def load(path: str) -> dict:
+    with open(path) as f:
+        return json.load(f)
 
-    # --- Prestige per domain (sampled from task completions) ---
-    # Build prestige history by replaying prestige deltas
-    from src.bench.db.models.task import TaskRequirement
-    from src.bench.db.models.company import Domain
-    prestige_history = {d.value: [(times[0] if times else None, 1.0)] for d in Domain}
 
-    completed = [t for t in tasks if t.completed_at]
-    completed.sort(key=lambda t: t.completed_at)
+def dt(iso: str) -> datetime:
+    return datetime.fromisoformat(iso)
 
-    current_prestige = {d.value: 1.0 for d in Domain}
-    for t in completed:
-        reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == t.id).all()
-        for req in reqs:
-            d = req.domain.value
-            if t.status == TaskStatus.COMPLETED_SUCCESS:
-                current_prestige[d] = min(10.0, current_prestige[d] + float(t.reward_prestige_delta))
-            else:
-                penalty = 1.4 * float(t.reward_prestige_delta)
-                current_prestige[d] = max(1.0, current_prestige[d] - penalty)
-            prestige_history[d].append((t.completed_at, current_prestige[d]))
 
-    # Final prestige from DB
-    final_prestige = {
-        row.domain.value: float(row.prestige_level)
-        for row in db.query(CompanyPrestige).all()
-    }
+def short_name(data: dict, path: str) -> str:
+    model = data.get("model", "")
+    if "/" in model:
+        return model.split("/")[-1]
+    return Path(path).stem.split("_", 4)[-1]
 
-# ── Plot ────────────────────────────────────────────────────────────────
-fig = plt.figure(figsize=(16, 10), facecolor="#0f1117")
-gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.45, wspace=0.35)
 
-ax_funds    = fig.add_subplot(gs[0, :])   # full width top
-ax_prestige = fig.add_subplot(gs[1, 0])
-ax_tasks    = fig.add_subplot(gs[1, 1])
+# ---------------------------------------------------------------------------
+# Individual plot functions
+# ---------------------------------------------------------------------------
 
-for ax in [ax_funds, ax_prestige, ax_tasks]:
-    ax.set_facecolor("#1a1d27")
-    ax.tick_params(colors="#aaaaaa", labelsize=9)
-    for spine in ax.spines.values():
-        spine.set_edgecolor("#333344")
+def plot_funds(ax, runs):
+    for i, (path, data) in enumerate(runs):
+        funds = data["time_series"]["funds"]
+        if not funds:
+            continue
+        times = [dt(f["time"]) for f in funds]
+        vals = [f["funds_cents"] / 100 for f in funds]
+        ax.plot(times, vals, color=COLORS[i % len(COLORS)], linewidth=2, label=short_name(data, path))
+    ax.axhline(y=200000, color='gray', linestyle='--', alpha=0.3)
+    ax.set_ylabel("Funds ($)")
+    ax.set_title("Funds Over Time")
 
-# ── Funds over time ──────────────────────────────────────────────────────
-payroll_times = [t for t, c in zip(times, categories) if c == LedgerCategory.MONTHLY_PAYROLL]
-payroll_vals  = [b for b, c in zip(balances, categories) if c == LedgerCategory.MONTHLY_PAYROLL]
-reward_times  = [t for t, c in zip(times, categories) if c == LedgerCategory.TASK_REWARD]
-reward_vals   = [b for b, c in zip(balances, categories) if c == LedgerCategory.TASK_REWARD]
 
-ax_funds.plot(times, balances, color="#4fc3f7", linewidth=1.8, zorder=3, label="Balance")
-ax_funds.fill_between(times, [b / max(balances) * min(balances) * 0.5 for b in balances],
-                      balances, alpha=0.08, color="#4fc3f7", zorder=2)
-ax_funds.scatter(reward_times, reward_vals, color="#2ecc71", s=30, zorder=5,
-                 label="Task reward", marker="^")
-ax_funds.scatter(payroll_times, payroll_vals, color="#e74c3c", s=20, zorder=5,
-                 label="Payroll", marker="v", alpha=0.7)
+def plot_tasks_cumulative(ax, runs):
+    for i, (path, data) in enumerate(runs):
+        tasks = data["time_series"].get("tasks", [])
+        ok = sorted([t for t in tasks if t.get("success") is True and t.get("completed_at")], key=lambda t: t["completed_at"])
+        fail = sorted([t for t in tasks if t.get("success") is False and t.get("completed_at")], key=lambda t: t["completed_at"])
+        color = COLORS[i % len(COLORS)]
+        name = short_name(data, path)
+        if ok:
+            ax.step([dt(t["completed_at"]) for t in ok], range(1, len(ok)+1), color=color, linewidth=2, label=f"{name} OK", where='post')
+        if fail:
+            ax.step([dt(t["completed_at"]) for t in fail], range(1, len(fail)+1), color=color, linewidth=1.5, linestyle='--', label=f"{name} fail", where='post', alpha=0.6)
+    ax.set_ylabel("Cumulative Tasks")
+    ax.set_title("Task Completions (OK vs Fail)")
 
-ax_funds.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x/1000:.0f}K" if x < 1_000_000 else f"${x/1_000_000:.1f}M"))
-ax_funds.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
-ax_funds.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-plt.setp(ax_funds.xaxis.get_majorticklabels(), rotation=30, ha="right")
-ax_funds.set_title("Company Funds Over Time", color="white", fontsize=12, pad=8)
-ax_funds.set_ylabel("Balance", color="#aaaaaa", fontsize=9)
-ax_funds.legend(fontsize=8, facecolor="#1a1d27", edgecolor="#333344",
-                labelcolor="white", loc="upper left")
-ax_funds.grid(axis="y", color="#333344", linewidth=0.5, linestyle="--")
 
-# ── Prestige evolution ───────────────────────────────────────────────────
-for domain, history in prestige_history.items():
-    hist_times = [h[0] for h in history if h[0] is not None]
-    hist_vals  = [h[1] for h in history if h[0] is not None]
-    if len(hist_times) < 2:
-        continue
-    color = DOMAIN_COLORS.get(domain, "#aaaaaa")
-    ax_prestige.step(hist_times, hist_vals, where="post",
-                     color=color, linewidth=1.6, label=domain)
+def plot_prestige(ax, runs):
+    # Only plot first run's prestige to avoid clutter
+    if not runs:
+        return
+    path, data = runs[0]
+    prestige = data["time_series"].get("prestige", [])
+    if not prestige:
+        return
+    domains = sorted(set(p["domain"] for p in prestige))
+    for domain in domains:
+        pts = [p for p in prestige if p["domain"] == domain]
+        times = [dt(p["time"]) for p in pts]
+        levels = [p["level"] for p in pts]
+        ax.plot(times, levels, color=DOMAIN_COLORS.get(domain, 'gray'), linewidth=1.5, label=domain)
+    ax.set_ylabel("Prestige Level")
+    ax.set_title(f"Prestige by Domain ({short_name(data, path)})")
 
-ax_prestige.axhline(y=1.0, color="#555566", linewidth=0.8, linestyle=":")
-ax_prestige.set_ylim(0.8, 10.5)
-ax_prestige.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
-ax_prestige.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-plt.setp(ax_prestige.xaxis.get_majorticklabels(), rotation=30, ha="right")
-ax_prestige.set_title("Prestige by Domain", color="white", fontsize=12, pad=8)
-ax_prestige.set_ylabel("Prestige Level", color="#aaaaaa", fontsize=9)
-ax_prestige.legend(fontsize=7.5, facecolor="#1a1d27", edgecolor="#333344",
-                   labelcolor="white", ncol=2, loc="upper left")
-ax_prestige.grid(axis="y", color="#333344", linewidth=0.5, linestyle="--")
 
-# ── Task outcomes scatter ────────────────────────────────────────────────
-if task_times:
-    colors = ["#2ecc71" if s else "#e74c3c" for s in task_success]
-    scatter = ax_tasks.scatter(
-        task_times, task_rewards,
-        c=colors, s=[40 + p * 12 for p in task_prestige],
-        alpha=0.85, zorder=4, edgecolors="none"
-    )
-    # Annotate prestige on each dot
-    for t, r, p, s in zip(task_times, task_rewards, task_prestige, task_success):
-        ax_tasks.annotate(f"p{p}", (t, r), fontsize=6, color="#cccccc",
-                          xytext=(3, 3), textcoords="offset points")
+def plot_trust(ax, runs):
+    if not runs:
+        return
+    path, data = runs[0]
+    trust = data["time_series"].get("client_trust", [])
+    if not trust:
+        return
+    clients = sorted(set(t["client_name"] for t in trust))
+    for client in clients:
+        pts = [t for t in trust if t["client_name"] == client]
+        times = [dt(t["time"]) for t in pts]
+        levels = [t["trust_level"] for t in pts]
+        is_rat = pts[0].get("loyalty", 0) < -0.3
+        ax.plot(times, levels, linewidth=1.5, linestyle='--' if is_rat else '-', label=f"{client}{'*' if is_rat else ''}")
+    ax.set_ylabel("Trust Level")
+    ax.set_title(f"Client Trust ({short_name(data, path)}) (* = RAT)")
 
-ax_tasks.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x/1000:.0f}K" if x < 1_000_000 else f"${x/1_000_000:.1f}M"))
-ax_tasks.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
-ax_tasks.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-plt.setp(ax_tasks.xaxis.get_majorticklabels(), rotation=30, ha="right")
-ax_tasks.set_title("Task Outcomes  (▲ success  ● fail,  size = prestige req)", color="white", fontsize=10, pad=8)
-ax_tasks.set_ylabel("Reward Value", color="#aaaaaa", fontsize=9)
-ax_tasks.grid(axis="y", color="#333344", linewidth=0.5, linestyle="--")
 
-# Legend patches
-from matplotlib.patches import Patch
-ax_tasks.legend(handles=[
-    Patch(color="#2ecc71", label=f"Success ({sum(task_success)})"),
-    Patch(color="#e74c3c", label=f"Fail ({sum(not s for s in task_success)})"),
-], fontsize=8, facecolor="#1a1d27", edgecolor="#333344", labelcolor="white")
+def plot_payroll(ax, runs):
+    for i, (path, data) in enumerate(runs):
+        ledger = data["time_series"].get("ledger", [])
+        payrolls = [e for e in ledger if e["category"] == "monthly_payroll"]
+        if not payrolls:
+            continue
+        # Group by month
+        monthly = {}
+        for p in payrolls:
+            m = p["time"][:7]
+            monthly[m] = monthly.get(m, 0) + abs(p["amount_cents"])
+        months = sorted(monthly.keys())
+        times = [datetime.strptime(m, "%Y-%m") for m in months]
+        amounts = [monthly[m] / 100 for m in months]
+        ax.plot(times, amounts, color=COLORS[i % len(COLORS)], linewidth=2, marker='o', markersize=3, label=short_name(data, path))
+    ax.set_ylabel("Monthly Payroll ($)")
+    ax.set_title("Payroll Growth")
 
-# ── Summary annotation ───────────────────────────────────────────────────
-final_bal = balances[-1] if balances else 0
-fig.text(0.5, 0.97,
-         f"minimax-m2.5  |  seed=42  |  harder config  |  "
-         f"150 turns  |  Aug 2025 sim time  |  "
-         f"final balance ${final_bal/1_000_000:.2f}M  |  "
-         f"{sum(task_success)}/{len(task_success)} tasks succeeded",
-         ha="center", va="top", color="#aaaaaa", fontsize=9)
 
-out = Path("plot_run_hard.png")
-plt.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-print(f"Saved: {out}")
+def plot_assignments(ax, runs):
+    for i, (path, data) in enumerate(runs):
+        assignments = data["time_series"].get("assignments", [])
+        completed = [a for a in assignments if a.get("completed_at")]
+        if not completed:
+            continue
+        times = [dt(a["completed_at"]) for a in completed]
+        counts = [a["num_assigned"] for a in completed]
+        ax.scatter(times, counts, color=COLORS[i % len(COLORS)], alpha=0.5, s=15, label=short_name(data, path))
+    ax.axhline(y=4, color='green', linestyle='--', alpha=0.3, label='efficient (4)')
+    ax.set_ylabel("Employees Assigned")
+    ax.set_title("Assignment Pattern Per Task")
+
+
+def plot_tokens(ax, runs):
+    for i, (path, data) in enumerate(runs):
+        transcript = data.get("transcript", [])
+        if not transcript or not transcript[0].get("prompt_tokens"):
+            continue
+        turns = [t["turn"] for t in transcript]
+        prompt = [t.get("prompt_tokens", 0) for t in transcript]
+        color = COLORS[i % len(COLORS)]
+        ax.plot(turns, prompt, color=color, linewidth=1, alpha=0.7, label=f"{short_name(data, path)} prompt")
+    ax.set_ylabel("Tokens")
+    ax.set_title("Prompt Tokens Per Turn")
+    ax.set_xlabel("Turn")
+
+
+def plot_cost(ax, runs):
+    for i, (path, data) in enumerate(runs):
+        transcript = data.get("transcript", [])
+        if not transcript:
+            continue
+        costs = [t.get("cost_usd", 0) for t in transcript]
+        cumulative = []
+        running = 0
+        for c in costs:
+            running += c
+            cumulative.append(running)
+        turns = [t["turn"] for t in transcript]
+        ax.plot(turns, cumulative, color=COLORS[i % len(COLORS)], linewidth=2, label=short_name(data, path))
+    ax.set_ylabel("Cumulative Cost ($)")
+    ax.set_title("API Cost")
+    ax.set_xlabel("Turn")
+
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+
+def print_summary(data, path):
+    ts = data["time_series"]
+    ledger = ts.get("ledger", [])
+    cats = {}
+    for e in ledger:
+        cats[e["category"]] = cats.get(e["category"], 0) + e["amount_cents"]
+
+    revenue = cats.get("task_reward", 0)
+    payroll = abs(cats.get("monthly_payroll", 0))
+    tasks = ts.get("tasks", [])
+    ok = sum(1 for t in tasks if t.get("success") is True)
+    fail = sum(1 for t in tasks if t.get("success") is False)
+    gated = sum(1 for t in tasks if t.get("success") is True and t.get("required_trust", 0) > 0)
+
+    assignments = ts.get("assignments", [])
+    avg_emp = sum(a["num_assigned"] for a in assignments) / len(assignments) if assignments else 0
+
+    employees = ts.get("employees", [])
+    final_payroll = sum(e["salary_cents"] for e in employees) / 100 if employees else 0
+
+    clients = ts.get("clients", [])
+    rats = [c for c in clients if c.get("is_rat")]
+
+    transcript = data.get("transcript", [])
+    total_prompt = sum(t.get("prompt_tokens", 0) for t in transcript)
+    total_completion = sum(t.get("completion_tokens", 0) for t in transcript)
+    final_funds = (200000 * 100 + revenue - payroll) / 100
+
+    print(f"\n{'='*60}")
+    print(f"  {short_name(data, path)}")
+    print(f"{'='*60}")
+    print(f"  Model:     {data.get('model', '?')}")
+    print(f"  Seed:      {data.get('seed', '?')}")
+    print(f"  Terminal:  {data.get('terminal_reason', '?')} at turn {data.get('turns_completed', '?')}")
+    print(f"  Final:     ${final_funds:,.0f}")
+    print(f"  Revenue:   ${revenue/100:,.0f} | Payroll: ${payroll/100:,.0f}")
+    print(f"  Tasks:     {ok} OK, {fail} fail ({gated} trust-gated)")
+    print(f"  Avg emp:   {avg_emp:.1f} per task")
+    print(f"  Payroll:   ${final_payroll:,.0f}/mo (final)")
+    print(f"  RATs:      {len(rats)} — {', '.join(c['name'] for c in rats) if rats else 'none'}")
+    print(f"  Scratchpad: {'yes' if ts.get('scratchpad') else 'no'}")
+    total_tokens = total_prompt + total_completion
+    print(f"  Tokens:    {total_prompt:,} prompt + {total_completion:,} completion = {total_tokens:,} total")
+    print(f"  Cost:      ${data.get('total_cost_usd', 0):.2f}")
+    started = data.get('started_at', '')
+    ended = data.get('ended_at', '')
+    if started and ended:
+        try:
+            t0 = datetime.fromisoformat(started)
+            t1 = datetime.fromisoformat(ended)
+            duration = t1 - t0
+            mins = duration.total_seconds() / 60
+            print(f"  Time:      {started[:19]} → {ended[:19]} ({mins:.1f} min)")
+        except Exception:
+            print(f"  Time:      {started[:19]} → {ended[:19]}")
+    else:
+        print(f"  Time:      N/A")
+
+    config = ts.get("config", {})
+    if config:
+        print(f"  Config:    salary_bump={config.get('salary_bump_pct')}, "
+              f"trust_build={config.get('trust_build_rate')}, "
+              f"rat_fraction={config.get('loyalty_rat_fraction')}, "
+              f"fail_penalty={config.get('penalty_fail_funds_pct')}")
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: uv run python scripts/plot_run.py results/*.json")
+        sys.exit(1)
+
+    paths = sys.argv[1:]
+    runs = [(p, load(p)) for p in paths]
+
+    for path, data in runs:
+        print_summary(data, path)
+
+    fig, axes = plt.subplots(4, 2, figsize=(16, 20))
+    fig.suptitle(f"YC-Bench — {len(runs)} run(s)", fontsize=14, fontweight='bold')
+
+    plot_funds(axes[0, 0], runs)
+    plot_tasks_cumulative(axes[0, 1], runs)
+    plot_prestige(axes[1, 0], runs)
+    plot_trust(axes[1, 1], runs)
+    plot_payroll(axes[2, 0], runs)
+    plot_assignments(axes[2, 1], runs)
+    plot_tokens(axes[3, 0], runs)
+    plot_cost(axes[3, 1], runs)
+
+    for ax in axes.flat:
+        ax.legend(fontsize=7, loc='best')
+        ax.grid(True, alpha=0.2)
+        ax.tick_params(labelsize=8)
+        if ax.get_xlabel() != "Turn":
+            try:
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+                ax.xaxis.set_major_locator(mdates.MonthLocator())
+            except Exception:
+                pass
+
+    plt.tight_layout()
+
+    Path("plots").mkdir(exist_ok=True)
+    out = "plots/run_analysis.png"
+    plt.savefig(out, dpi=150, bbox_inches='tight')
+    print(f"\nPlot saved to {out}")
+
+
+if __name__ == "__main__":
+    main()

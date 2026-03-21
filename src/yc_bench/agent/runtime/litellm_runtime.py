@@ -17,6 +17,7 @@ from ..tools.run_command_schema import normalize_result
 logger = logging.getLogger(__name__)
 
 litellm.suppress_debug_info = True
+litellm.drop_params = True  # silently drop unsupported params (e.g. tool_choice for mini/nano models)
 
 # Tool schema passed to the LLM on every call
 _RUN_COMMAND_TOOL = {
@@ -45,6 +46,7 @@ _RUN_COMMAND_TOOL = {
 class _Session:
     messages: list = field(default_factory=list)
     scratchpad: str | None = None
+    turn_logs: list = field(default_factory=list)  # full API call logs per turn
 
 
 class LiteLLMRuntime(AgentRuntime):
@@ -127,9 +129,15 @@ class LiteLLMRuntime(AgentRuntime):
             raise RuntimeError("run_turn failed without result") from last_err
 
         final_output, tool_calls_made, resume_payload, turn_cost = result
+        # Include latest turn log for transcript saving
+        latest_log = session.turn_logs[-1] if session.turn_logs else {}
         return RuntimeTurnResult(
             final_output=final_output,
-            raw_result={"tool_calls": tool_calls_made},
+            raw_result={
+                "tool_calls": tool_calls_made,
+                "prompt_tokens": latest_log.get("prompt_tokens", 0),
+                "completion_tokens": latest_log.get("completion_tokens", 0),
+            },
             checkpoint_advanced=resume_payload is not None,
             resume_payload=resume_payload,
             turn_cost_usd=turn_cost,
@@ -178,18 +186,28 @@ class LiteLLMRuntime(AgentRuntime):
 
         # Log token usage and cost per call
         turn_cost = 0.0
+        prompt_tokens = 0
+        completion_tokens = 0
         usage = getattr(response, "usage", None)
         if usage:
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
             cost = getattr(response, "_hidden_params", {}).get("response_cost") or 0
             turn_cost = float(cost)
             logger.info(
                 "LLM call: prompt_tokens=%s completion_tokens=%s cost=$%.6f",
-                getattr(usage, "prompt_tokens", "?"),
-                getattr(usage, "completion_tokens", "?"),
-                turn_cost,
+                prompt_tokens, completion_tokens, turn_cost,
             )
 
         message = response.choices[0].message
+
+        # Save full turn log for analysis
+        session.turn_logs.append({
+            "messages_sent": messages,  # full messages array as sent to API
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "cost_usd": turn_cost,
+        })
         tool_calls = getattr(message, "tool_calls", None) or []
 
         tool_calls_made = []

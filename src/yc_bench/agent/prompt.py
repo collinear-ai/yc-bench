@@ -18,7 +18,7 @@ All actions use `yc-bench` CLI commands via `run_command`. All return JSON.
 
 Run multiple tasks concurrently when possible. Accept → assign → dispatch a second task before calling sim resume.
 
-**Use `yc-bench scratchpad write`** to save strategy notes — your conversation history is truncated after 20 turns, but scratchpad persists in the system prompt. Write rules, not events (e.g. "assign Emp_1,Emp_4,Emp_7 for inference tasks" not "Task-42 failed").
+**Use `yc-bench scratchpad write`** to save strategy notes — your conversation history is truncated after 20 turns, but scratchpad persists in the system prompt. Write reusable rules, not one-off observations.
 
 ## Commands
 
@@ -43,7 +43,7 @@ Run multiple tasks concurrently when possible. Accept → assign → dispatch a 
 
 ## Key Mechanics
 
-- **Salary bumps**: completed tasks raise salary for every assigned employee. Assigning all 8 to every task compounds payroll until it exceeds revenue — assign 3-4 domain specialists instead.
+- **Salary bumps**: completed tasks raise salary for every assigned employee. More employees assigned = higher payroll growth.
 - **Throughput split**: employees on multiple active tasks split their rate (rate/sqrt(N)). Two tasks run at ~71% each.
 - **Deadlines**: success before deadline = reward + prestige. Failure = prestige penalty, no reward.
 - **Trust**: completing tasks for a client builds trust → less work per task, access to gated tasks. Working for one client erodes trust with others.

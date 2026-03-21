@@ -86,15 +86,23 @@ def task_accept(
                     f"does not meet task requirement ({task.required_trust})."
                 )
 
-        # Apply trust work reduction at accept time (no reward multiplier —
-        # faster completion from trust already increases revenue via throughput).
+        # Check if this client is a RAT (loyalty < -0.3)
         _cfg = _get_world_cfg()
+        is_rat = False
         if task.client_id is not None:
+            client_row = db.query(Client).filter(Client.id == task.client_id).one_or_none()
+            if client_row and client_row.loyalty < -0.3:
+                is_rat = True
+
+        # Apply trust work reduction (only for non-RAT clients —
+        # RATs don't honor trust, they scope-creep regardless).
+        if not is_rat and task.client_id is not None:
             work_reduction = _cfg.trust_work_reduction_max * (trust_level / _cfg.trust_max)
             for r in reqs:
-                r.required_qty = int(float(r.required_qty) * (1 - work_reduction))
+                reduced = int(float(r.required_qty) * (1 - work_reduction))
+                r.required_qty = max(200, reduced)  # respect DB constraint
 
-        # Compute deadline from advertised qty BEFORE scope creep
+        # Compute deadline from current qty (after trust reduction, before scope creep)
         max_domain_qty = max(float(r.required_qty) for r in reqs)
         accepted_at = sim_state.sim_time
         deadline = _compute_deadline(accepted_at, max_domain_qty)
@@ -103,22 +111,13 @@ def task_accept(
         task.advertised_reward_cents = task.reward_funds_cents
 
         # Scope creep: RAT clients inflate required_qty after accept.
-        # Minimum inflation ensures ALL RAT tasks exceed deadline (which was
-        # computed from pre-creep qty). The agent can't tell from the deadline
-        # alone — the trap only springs after accept.
-        if task.client_id is not None:
-            client_row = db.query(Client).filter(Client.id == task.client_id).one_or_none()
-            if client_row and client_row.loyalty < -0.3:
-                intensity = abs(client_row.loyalty)
-                inflation = _cfg.scope_creep_max * intensity
-                # Ensure enough inflation to bust the deadline:
-                # deadline_hours = deadline_min_biz_days * work_hours
-                # need inflated_qty / effective_rate > deadline_hours
-                # Conservative: at least 130% inflation so even small tasks fail
-                inflation = max(1.3, inflation)
-                for r in reqs:
-                    inflated = float(r.required_qty) * (1 + inflation)
-                    r.required_qty = int(min(25000, max(200, inflated)))
+        if is_rat:
+            intensity = abs(client_row.loyalty)
+            inflation = _cfg.scope_creep_max * intensity
+            inflation = max(2.0, inflation)
+            for r in reqs:
+                inflated = float(r.required_qty) * (1 + inflation)
+                r.required_qty = int(min(25000, max(200, inflated)))
 
         # Transition task
         task.status = TaskStatus.PLANNED
