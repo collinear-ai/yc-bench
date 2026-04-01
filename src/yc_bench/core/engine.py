@@ -9,6 +9,7 @@ Main loop:
 
 Payroll-event tie-breaking: payroll first at same timestamp (start-of-day obligation).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -57,14 +58,16 @@ def apply_payroll(db: Session, company_id: UUID, time: datetime) -> bool:
     for emp in employees:
         salary = int(emp.salary_cents)
         total_payroll += salary
-        db.add(LedgerEntry(
-            company_id=company_id,
-            occurred_at=time,
-            category=LedgerCategory.MONTHLY_PAYROLL,
-            amount_cents=-salary,
-            ref_type="employee",
-            ref_id=emp.id,
-        ))
+        db.add(
+            LedgerEntry(
+                company_id=company_id,
+                occurred_at=time,
+                category=LedgerCategory.MONTHLY_PAYROLL,
+                amount_cents=-salary,
+                ref_type="employee",
+                ref_id=emp.id,
+            )
+        )
 
     company.funds_cents -= total_payroll
     db.flush()
@@ -72,24 +75,44 @@ def apply_payroll(db: Session, company_id: UUID, time: datetime) -> bool:
     return company.funds_cents < 0
 
 
-def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id: UUID) -> Dict:
+def dispatch_event(
+    db: Session, event: SimEvent, sim_time: datetime, company_id: UUID
+) -> Dict:
     """Route event to appropriate handler. Returns result dict."""
     if event.event_type == EventType.TASK_HALF_PROGRESS:
         result = handle_task_half(db, event)
         # Recalculate ETAs so the next milestone is scheduled
         from ..config import get_world_config
-        recalculate_etas(db, company_id, sim_time, milestones=get_world_config().task_progress_milestones)
-        return {"type": "task_half", "task_id": str(result.task_id), "milestone_pct": result.milestone_pct, "handled": result.handled}
+
+        recalculate_etas(
+            db,
+            company_id,
+            sim_time,
+            milestones=get_world_config().task_progress_milestones,
+        )
+        return {
+            "type": "task_half",
+            "task_id": str(result.task_id),
+            "milestone_pct": result.milestone_pct,
+            "handled": result.handled,
+        }
 
     elif event.event_type == EventType.TASK_COMPLETED:
         result = handle_task_complete(db, event, sim_time)
         # Recalculate ETAs — freed employees change topology
         from ..config import get_world_config
-        recalculate_etas(db, company_id, sim_time, milestones=get_world_config().task_progress_milestones)
+
+        recalculate_etas(
+            db,
+            company_id,
+            sim_time,
+            milestones=get_world_config().task_progress_milestones,
+        )
         # Include operational details so the agent can learn from outcomes
         from ..db.models.task import Task, TaskAssignment
         from ..db.models.client import Client
         from ..db.models.employee import Employee
+
         task_row = db.query(Task).filter(Task.id == result.task_id).one_or_none()
         client_name = None
         task_title = None
@@ -99,20 +122,38 @@ def dispatch_event(db: Session, event: SimEvent, sim_time: datetime, company_id:
         if task_row:
             task_title = task_row.title
             if task_row.client_id:
-                cl = db.query(Client).filter(Client.id == task_row.client_id).one_or_none()
+                cl = (
+                    db.query(Client)
+                    .filter(Client.id == task_row.client_id)
+                    .one_or_none()
+                )
                 if cl:
                     client_name = cl.name
             # Deadline vs completion info
             if task_row.deadline and task_row.completed_at:
-                hours_diff = (task_row.deadline - task_row.completed_at).total_seconds() / 3600
+                hours_diff = (
+                    task_row.deadline - task_row.completed_at
+                ).total_seconds() / 3600
                 deadline_info = f"{'ahead by' if hours_diff >= 0 else 'late by'} {abs(hours_diff):.0f}h"
             # Which employees were assigned + salary bump impact
-            assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id == result.task_id).all()
+            assignments = (
+                db.query(TaskAssignment)
+                .filter(TaskAssignment.task_id == result.task_id)
+                .all()
+            )
             wc = get_world_config()
             for a in assignments:
-                emp = db.query(Employee).filter(Employee.id == a.employee_id).one_or_none()
+                emp = (
+                    db.query(Employee)
+                    .filter(Employee.id == a.employee_id)
+                    .one_or_none()
+                )
                 if emp:
-                    bump = int(emp.salary_cents * wc.salary_bump_pct) if result.success else 0
+                    bump = (
+                        int(emp.salary_cents * wc.salary_bump_pct)
+                        if result.success
+                        else 0
+                    )
                     salary_bump_total += bump
                     assigned_employees.append(emp.name)
         return {
@@ -148,7 +189,9 @@ def apply_prestige_decay(db: Session, company_id: UUID, days_elapsed: float) -> 
         return
     decay = Decimal(str(wc.prestige_decay_per_day * days_elapsed))
     floor = Decimal(str(wc.prestige_min))
-    rows = db.query(CompanyPrestige).filter(CompanyPrestige.company_id == company_id).all()
+    rows = (
+        db.query(CompanyPrestige).filter(CompanyPrestige.company_id == company_id).all()
+    )
     for row in rows:
         row.prestige_level = max(floor, row.prestige_level - decay)
     db.flush()
@@ -231,15 +274,18 @@ def advance_time(
 
             # Report payroll as a wake event so the agent gets control back
             company = db.query(Company).filter(Company.id == company_id).one()
-            result.wake_events.append({
-                "type": "monthly_payroll",
-                "funds_after": company.funds_cents,
-            })
+            result.wake_events.append(
+                {
+                    "type": "monthly_payroll",
+                    "funds_after": company.funds_cents,
+                }
+            )
 
             if bankrupt:
                 # Insert bankruptcy event at this time
                 insert_event(
-                    db, company_id,
+                    db,
+                    company_id,
                     EventType.BANKRUPTCY,
                     current_time,
                     {"reason": "funds_negative_after_payroll"},

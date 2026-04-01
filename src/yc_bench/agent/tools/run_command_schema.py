@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class RunCommandResult:
     ok: bool
@@ -10,6 +11,7 @@ class RunCommandResult:
     stderr: str
     sim_time: str | None
     command: str
+
 
 def normalize_result(payload):
     return RunCommandResult(

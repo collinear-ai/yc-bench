@@ -3,11 +3,24 @@ from __future__ import annotations
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Integer, Numeric, String, Uuid, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum as SAEnum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Uuid,
+    text,
+)
 from sqlalchemy.orm import mapped_column
 
 from ..base import Base
 from .company import Domain
+
 
 class TaskStatus(str, Enum):
     MARKET = "market"
@@ -17,14 +30,26 @@ class TaskStatus(str, Enum):
     COMPLETED_FAIL = "completed_fail"
     CANCELLED = "cancelled"
 
+
 class Task(Base):
     __tablename__ = "tasks"
     __table_args__ = (
-        CheckConstraint("required_prestige >= 1 AND required_prestige <= 10", name="ck_tasks_required_prestige_range"),
+        CheckConstraint(
+            "required_prestige >= 1 AND required_prestige <= 10",
+            name="ck_tasks_required_prestige_range",
+        ),
         CheckConstraint("skill_boost_pct >= 0", name="ck_tasks_skill_boost_pct_range"),
-        CheckConstraint("reward_funds_cents >= 0", name="ck_tasks_reward_funds_cents_gte_0"),
-        CheckConstraint("reward_prestige_delta >= 0 AND reward_prestige_delta <= 5", name="ck_tasks_reward_prestige_delta_range"),
-        CheckConstraint("required_trust >= 0 AND required_trust <= 5", name="ck_tasks_required_trust_range"),
+        CheckConstraint(
+            "reward_funds_cents >= 0", name="ck_tasks_reward_funds_cents_gte_0"
+        ),
+        CheckConstraint(
+            "reward_prestige_delta >= 0 AND reward_prestige_delta <= 5",
+            name="ck_tasks_reward_prestige_delta_range",
+        ),
+        CheckConstraint(
+            "required_trust >= 0 AND required_trust <= 5",
+            name="ck_tasks_required_trust_range",
+        ),
     )
 
     id = mapped_column(
@@ -43,7 +68,11 @@ class Task(Base):
         nullable=True,
     )
     status = mapped_column(
-        SAEnum(TaskStatus, name="task_status", values_callable=lambda e: [x.value for x in e]),
+        SAEnum(
+            TaskStatus,
+            name="task_status",
+            values_callable=lambda e: [x.value for x in e],
+        ),
         nullable=False,
         default=TaskStatus.MARKET,
     )
@@ -104,12 +133,21 @@ class Task(Base):
         nullable=True,
     )
 
+
 class TaskRequirement(Base):
     __tablename__ = "task_requirements"
     __table_args__ = (
-        CheckConstraint("required_qty >= 200 AND required_qty <= 25000", name="ck_task_requirements_required_qty_range"),
-        CheckConstraint("completed_qty >= 0", name="ck_task_requirements_completed_qty_gte_0"),
-        CheckConstraint("completed_qty <= required_qty", name="ck_task_requirements_completed_qty_lte_required_qty"),
+        CheckConstraint(
+            "required_qty >= 200 AND required_qty <= 25000",
+            name="ck_task_requirements_required_qty_range",
+        ),
+        CheckConstraint(
+            "completed_qty >= 0", name="ck_task_requirements_completed_qty_gte_0"
+        ),
+        CheckConstraint(
+            "completed_qty <= required_qty",
+            name="ck_task_requirements_completed_qty_lte_required_qty",
+        ),
     )
 
     task_id = mapped_column(
@@ -133,6 +171,7 @@ class TaskRequirement(Base):
         default=0,
     )
 
+
 class TaskAssignment(Base):
     __tablename__ = "task_assignments"
 
@@ -152,5 +191,6 @@ class TaskAssignment(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+
 
 __all__ = ["TaskStatus", "Task", "TaskRequirement", "TaskAssignment"]

@@ -1,4 +1,5 @@
 """Live terminal dashboard for YC-Bench using Rich."""
+
 from __future__ import annotations
 
 import os
@@ -13,15 +14,14 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
 # Domain → (display name, color) for styled inline display
 DOMAIN_STYLE = {
-    "research":         ("Research",  "bright_magenta"),
-    "inference":        ("Inference", "bright_cyan"),
-    "data_environment": ("Data/Env",  "bright_blue"),
-    "training":         ("Training",  "red"),
+    "research": ("Research", "bright_magenta"),
+    "inference": ("Inference", "bright_cyan"),
+    "data_environment": ("Data/Env", "bright_blue"),
+    "training": ("Training", "red"),
 }
 
 
@@ -32,7 +32,12 @@ def _sparkline(values: list[float], width: int = 20) -> str:
     vals = values[-width:]
     lo, hi = min(vals), max(vals)
     span = hi - lo if hi != lo else 1.0
-    return "".join(SPARK_CHARS[min(int((v - lo) / span * (len(SPARK_CHARS) - 1)), len(SPARK_CHARS) - 1)] for v in vals)
+    return "".join(
+        SPARK_CHARS[
+            min(int((v - lo) / span * (len(SPARK_CHARS) - 1)), len(SPARK_CHARS) - 1)
+        ]
+        for v in vals
+    )
 
 
 def _fmt_dollars(cents: int) -> str:
@@ -114,57 +119,90 @@ def _query_detailed_snapshot(db_factory, company_id) -> dict[str, Any]:
     with db_factory() as db:
         tasks_detail = []
         for status in (TaskStatus.ACTIVE, TaskStatus.PLANNED):
-            tasks = db.query(Task).filter(
-                Task.company_id == company_id,
-                Task.status == status,
-            ).all()
+            tasks = (
+                db.query(Task)
+                .filter(
+                    Task.company_id == company_id,
+                    Task.status == status,
+                )
+                .all()
+            )
             for t in tasks:
-                reqs = db.query(TaskRequirement).filter(
-                    TaskRequirement.task_id == t.id,
-                ).all()
+                reqs = (
+                    db.query(TaskRequirement)
+                    .filter(
+                        TaskRequirement.task_id == t.id,
+                    )
+                    .all()
+                )
                 domains = [r.domain.value for r in reqs]
                 progress = [
                     (r.domain.value, float(r.completed_qty), float(r.required_qty))
                     for r in reqs
                 ]
                 deadline_str = t.deadline.strftime("%Y-%m-%d") if t.deadline else "-"
-                tasks_detail.append(TaskInfo(
-                    title=t.title,
-                    status=status.value,
-                    prestige=t.required_prestige,
-                    reward_dollars=t.reward_funds_cents / 100.0,
-                    deadline=deadline_str,
-                    domains=domains,
-                    progress=progress,
-                ))
+                tasks_detail.append(
+                    TaskInfo(
+                        title=t.title,
+                        status=status.value,
+                        prestige=t.required_prestige,
+                        reward_dollars=t.reward_funds_cents / 100.0,
+                        deadline=deadline_str,
+                        domains=domains,
+                        progress=progress,
+                    )
+                )
 
         from sqlalchemy import func
-        completed_count = db.query(func.count(Task.id)).filter(
-            Task.company_id == company_id,
-            Task.status == TaskStatus.COMPLETED_SUCCESS,
-        ).scalar() or 0
-        failed_count = db.query(func.count(Task.id)).filter(
-            Task.company_id == company_id,
-            Task.status == TaskStatus.COMPLETED_FAIL,
-        ).scalar() or 0
+
+        completed_count = (
+            db.query(func.count(Task.id))
+            .filter(
+                Task.company_id == company_id,
+                Task.status == TaskStatus.COMPLETED_SUCCESS,
+            )
+            .scalar()
+            or 0
+        )
+        failed_count = (
+            db.query(func.count(Task.id))
+            .filter(
+                Task.company_id == company_id,
+                Task.status == TaskStatus.COMPLETED_FAIL,
+            )
+            .scalar()
+            or 0
+        )
 
         employees_detail = []
-        employees = db.query(Employee).filter(
-            Employee.company_id == company_id,
-        ).all()
+        employees = (
+            db.query(Employee)
+            .filter(
+                Employee.company_id == company_id,
+            )
+            .all()
+        )
         for emp in employees:
-            skills = db.query(EmployeeSkillRate).filter(
-                EmployeeSkillRate.employee_id == emp.id,
-            ).all()
+            skills = (
+                db.query(EmployeeSkillRate)
+                .filter(
+                    EmployeeSkillRate.employee_id == emp.id,
+                )
+                .all()
+            )
             skill_list = [
                 (s.domain.value, float(s.rate_domain_per_hour))
-                for s in sorted(skills, key=lambda s: float(s.rate_domain_per_hour), reverse=True)
+                for s in sorted(
+                    skills, key=lambda s: float(s.rate_domain_per_hour), reverse=True
+                )
             ]
-            employees_detail.append(EmployeeInfo(
-                name=emp.name,
-                salary_dollars=emp.salary_cents / 100.0,
-                skills=skill_list,
-            ))
+            employees_detail.append(
+                EmployeeInfo(
+                    name=emp.name,
+                    salary_dollars=emp.salary_cents / 100.0,
+                    skills=skill_list,
+                )
+            )
 
     return {
         "tasks_detail": tasks_detail,
@@ -177,8 +215,9 @@ def _query_detailed_snapshot(db_factory, company_id) -> dict[str, Any]:
 class BenchmarkDashboard:
     """Rich Live dashboard for benchmark progress."""
 
-    def __init__(self, model: str, seed: int, config_name: str,
-                 db_factory=None, company_id=None):
+    def __init__(
+        self, model: str, seed: int, config_name: str, db_factory=None, company_id=None
+    ):
         self._console = Console()
         self._live: Live | None = None
         self._state = DashboardState(model=model, seed=seed, config_name=config_name)
@@ -192,6 +231,7 @@ class BenchmarkDashboard:
 
     def start(self) -> None:
         import sys
+
         self._start_time = time.monotonic()
         self._state.status = "[dim]Starting...[/dim]"
         self._stderr_backup = sys.stderr
@@ -207,6 +247,7 @@ class BenchmarkDashboard:
 
     def stop(self) -> None:
         import sys
+
         if self._live is not None:
             self._live.stop()
             self._live = None
@@ -224,7 +265,12 @@ class BenchmarkDashboard:
         self._state.elapsed_sec = time.monotonic() - self._start_time
         self._refresh()
 
-    def update(self, snapshot: dict[str, Any], run_state: Any, commands: list[str] | None = None) -> None:
+    def update(
+        self,
+        snapshot: dict[str, Any],
+        run_state: Any,
+        commands: list[str] | None = None,
+    ) -> None:
         now = time.monotonic()
         s = self._state
 
@@ -249,7 +295,9 @@ class BenchmarkDashboard:
             s.runway_months = float("inf")
 
         if commands:
-            first = commands[0].split(" -> ")[0] if " -> " in commands[0] else commands[0]
+            first = (
+                commands[0].split(" -> ")[0] if " -> " in commands[0] else commands[0]
+            )
             if len(commands) > 1:
                 s.last_action = f"{first} (+{len(commands)-1} more)"
             else:
@@ -258,7 +306,11 @@ class BenchmarkDashboard:
             s.last_action = "(no commands)"
 
         if run_state.terminal:
-            reason = run_state.terminal_reason.value if run_state.terminal_reason else "unknown"
+            reason = (
+                run_state.terminal_reason.value
+                if run_state.terminal_reason
+                else "unknown"
+            )
             s.status = f"[bold green]DONE: {reason}[/bold green]"
         else:
             s.status = f"[green]Turn {s.turn} complete[/green]"
@@ -286,16 +338,27 @@ class BenchmarkDashboard:
 
         table.add_row("Turns", str(s.turn))
         table.add_row("Final Funds", _fmt_dollars(s.funds_cents))
-        table.add_row("Tasks", f"[green]{s.completed_count} done[/green] / [red]{s.failed_count} failed[/red]")
+        table.add_row(
+            "Tasks",
+            f"[green]{s.completed_count} done[/green] / [red]{s.failed_count} failed[/red]",
+        )
         table.add_row("API Cost", f"${s.api_cost_usd:.4f}")
         table.add_row("Elapsed", f"{elapsed_h}h {elapsed_m:02d}m {elapsed_s:02d}s")
-        reason = run_state.terminal_reason.value if run_state.terminal_reason else "max_turns"
+        reason = (
+            run_state.terminal_reason.value
+            if run_state.terminal_reason
+            else "max_turns"
+        )
         table.add_row("Outcome", reason)
 
         panel = Panel(
             table,
             title="[bold]YC-Bench Complete[/bold]",
-            border_style="green" if reason == "horizon_end" else "red" if reason == "bankruptcy" else "yellow",
+            border_style=(
+                "green"
+                if reason == "horizon_end"
+                else "red" if reason == "bankruptcy" else "yellow"
+            ),
         )
         self._console.print(panel)
 
@@ -317,9 +380,18 @@ class BenchmarkDashboard:
         table.add_column(style="bold cyan", width=12)
         table.add_column(overflow="ellipsis", no_wrap=True)
 
-        table.add_row("Model", f"[bold]{short_model}[/bold]  seed={s.seed}  {s.config_name}")
+        table.add_row(
+            "Model", f"[bold]{short_model}[/bold]  seed={s.seed}  {s.config_name}"
+        )
         table.add_row("Turn", f"[bold white]{s.turn}[/bold white]")
-        table.add_row("Sim Date", f"{s.sim_date} [dim]->[/dim] {s.horizon_end}" if s.sim_date else "[dim]--[/dim]")
+        table.add_row(
+            "Sim Date",
+            (
+                f"{s.sim_date} [dim]->[/dim] {s.horizon_end}"
+                if s.sim_date
+                else "[dim]--[/dim]"
+            ),
+        )
         table.add_row("Elapsed", f"{elapsed_h}h {elapsed_m:02d}m {elapsed_s:02d}s")
 
         # Funds with colored sparkline
@@ -335,7 +407,9 @@ class BenchmarkDashboard:
         if s.runway_months == float("inf"):
             runway_str = "[green]unlimited[/green]"
         elif s.runway_months < 2:
-            runway_str = f"[bold red blink]{s.runway_months:.1f}mo CRITICAL[/bold red blink]"
+            runway_str = (
+                f"[bold red blink]{s.runway_months:.1f}mo CRITICAL[/bold red blink]"
+            )
         elif s.runway_months < 4:
             runway_str = f"[bold yellow]{s.runway_months:.1f}mo LOW[/bold yellow]"
         else:
@@ -348,8 +422,22 @@ class BenchmarkDashboard:
             task_parts += f"  [green]{s.completed_count} done[/green] [red]{s.failed_count} fail[/red]"
         table.add_row("Tasks", task_parts)
 
-        table.add_row("Team", f"{s.employee_count} people  {_fmt_dollars(s.monthly_payroll_cents)}/mo" if s.monthly_payroll_cents else str(s.employee_count))
-        table.add_row("Cost", f"${s.api_cost_usd:.4f}  ({s.turn_time_sec:.1f}s/turn)" if s.turn_time_sec else f"${s.api_cost_usd:.4f}")
+        table.add_row(
+            "Team",
+            (
+                f"{s.employee_count} people  {_fmt_dollars(s.monthly_payroll_cents)}/mo"
+                if s.monthly_payroll_cents
+                else str(s.employee_count)
+            ),
+        )
+        table.add_row(
+            "Cost",
+            (
+                f"${s.api_cost_usd:.4f}  ({s.turn_time_sec:.1f}s/turn)"
+                if s.turn_time_sec
+                else f"${s.api_cost_usd:.4f}"
+            ),
+        )
         table.add_row("Action", s.last_action or "[dim]--[/dim]")
         table.add_row("Status", s.status)
 
@@ -366,10 +454,10 @@ class BenchmarkDashboard:
             )
 
         table = Table(box=None, padding=(0, 1), show_edge=False)
-        table.add_column("", width=2)                                           # status marker
+        table.add_column("", width=2)  # status marker
         table.add_column("Task", style="bold white", no_wrap=True, max_width=20)
-        table.add_column("$$$", width=8, justify="right", no_wrap=True)         # reward
-        table.add_column("Due", width=10, no_wrap=True)                         # deadline
+        table.add_column("$$$", width=8, justify="right", no_wrap=True)  # reward
+        table.add_column("Due", width=10, no_wrap=True)  # deadline
         table.add_column("Progress", no_wrap=True, overflow="ellipsis", ratio=1)
 
         for t in s.tasks_detail[:6]:
@@ -410,7 +498,11 @@ class BenchmarkDashboard:
         s = self._state
 
         if not s.employees_detail:
-            return Panel("[dim]No employees hired yet...[/dim]", title="[bold]Team[/bold]", border_style="magenta")
+            return Panel(
+                "[dim]No employees hired yet...[/dim]",
+                title="[bold]Team[/bold]",
+                border_style="magenta",
+            )
 
         table = Table(box=None, padding=(0, 1), show_edge=False)
         table.add_column("Name", style="bold white", width=14, no_wrap=True)

@@ -1,4 +1,5 @@
 """Handler for task progress milestone events."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -24,7 +25,9 @@ def handle_task_half(db: Session, event: SimEvent) -> TaskHalfResult:
     task = db.query(Task).filter(Task.id == task_id).one_or_none()
 
     if task is None:
-        return TaskHalfResult(task_id=task_id, handled=False, milestone_pct=milestone_pct)
+        return TaskHalfResult(
+            task_id=task_id, handled=False, milestone_pct=milestone_pct
+        )
 
     task.progress_milestone_pct = max(task.progress_milestone_pct or 0, milestone_pct)
     db.flush()

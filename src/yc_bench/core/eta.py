@@ -3,6 +3,7 @@
 Projection events (task_completed, task_half_progress) are inserted into sim_events
 and recalculated whenever the topology changes (assign, dispatch, cancel, complete).
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -31,9 +32,7 @@ def solve_task_completion_time(
     Completion = all domains reach 100%. Time is max(remaining[d] / rate[d]) across domains.
     Returns None if any domain has remaining > 0 and rate == 0 (impossible to complete).
     """
-    reqs = db.query(TaskRequirement).filter(
-        TaskRequirement.task_id == task_id
-    ).all()
+    reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == task_id).all()
 
     if not reqs:
         return None
@@ -78,9 +77,7 @@ def solve_task_halfway_time(
     Each domain progresses linearly until capped at required_d.
     Returns None if reaching 50% is impossible.
     """
-    reqs = db.query(TaskRequirement).filter(
-        TaskRequirement.task_id == task_id
-    ).all()
+    reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == task_id).all()
 
     if not reqs:
         return None
@@ -116,19 +113,24 @@ def solve_task_halfway_time(
             cap_hours = Decimal("0")
         else:
             cap_hours = remaining / rate
-        domains.append({
-            "completed": req.completed_qty,
-            "required": req.required_qty,
-            "rate": rate,
-            "cap_hours": cap_hours,
-        })
+        domains.append(
+            {
+                "completed": req.completed_qty,
+                "required": req.required_qty,
+                "rate": rate,
+                "cap_hours": cap_hours,
+            }
+        )
 
     # Piecewise-linear solver over cap breakpoints.
     # In each segment, d(current_completed)/dh = sum(rate_d) for uncapped domains.
-    breakpoints = sorted(set(
-        d["cap_hours"] for d in domains
-        if d["cap_hours"] is not None and d["cap_hours"] > 0
-    ))
+    breakpoints = sorted(
+        set(
+            d["cap_hours"]
+            for d in domains
+            if d["cap_hours"] is not None and d["cap_hours"] > 0
+        )
+    )
 
     h = Decimal("0")
     completed_sum = current_completed
@@ -201,10 +203,14 @@ def recalculate_etas(
 
     # Determine which tasks to recalculate
     if impacted_task_ids is None:
-        active_tasks = db.query(Task).filter(
-            Task.company_id == company_id,
-            Task.status == TaskStatus.ACTIVE,
-        ).all()
+        active_tasks = (
+            db.query(Task)
+            .filter(
+                Task.company_id == company_id,
+                Task.status == TaskStatus.ACTIVE,
+            )
+            .all()
+        )
         task_ids = {t.id for t in active_tasks}
     else:
         task_ids = impacted_task_ids
@@ -214,12 +220,18 @@ def recalculate_etas(
 
     # Delete stale unconsumed projection events for these tasks
     for tid in task_ids:
-        stale = db.query(SimEvent).filter(
-            SimEvent.company_id == company_id,
-            SimEvent.consumed == False,
-            SimEvent.event_type.in_([EventType.TASK_COMPLETED, EventType.TASK_HALF_PROGRESS]),
-            SimEvent.dedupe_key.like(f"task:{tid}:%"),
-        ).all()
+        stale = (
+            db.query(SimEvent)
+            .filter(
+                SimEvent.company_id == company_id,
+                SimEvent.consumed == False,
+                SimEvent.event_type.in_(
+                    [EventType.TASK_COMPLETED, EventType.TASK_HALF_PROGRESS]
+                ),
+                SimEvent.dedupe_key.like(f"task:{tid}:%"),
+            )
+            .all()
+        )
         for ev in stale:
             db.delete(ev)
 
@@ -251,7 +263,9 @@ def recalculate_etas(
             milestone_pct = int(milestone * 100)
             if milestone_pct <= emitted_pct:
                 continue
-            milestone_time = solve_task_halfway_time(db, tid, now, rates, half_threshold=milestone)
+            milestone_time = solve_task_halfway_time(
+                db, tid, now, rates, half_threshold=milestone
+            )
             if milestone_time is not None:
                 insert_event(
                     db,

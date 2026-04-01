@@ -4,16 +4,26 @@ from decimal import Decimal
 from uuid import uuid4
 from enum import Enum
 
-from sqlalchemy import BigInteger, CheckConstraint, Enum as SAEnum, ForeignKey, Numeric, String, Uuid
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Enum as SAEnum,
+    ForeignKey,
+    Numeric,
+    String,
+    Uuid,
+)
 from sqlalchemy.orm import mapped_column
 
 from ..base import Base
+
 
 class Domain(str, Enum):
     RESEARCH = "research"
     INFERENCE = "inference"
     DATA_ENVIRONMENT = "data_environment"
     TRAINING = "training"
+
 
 class Company(Base):
     __tablename__ = "companies"
@@ -31,11 +41,15 @@ class Company(Base):
         BigInteger,
         nullable=False,
     )
-    
+
+
 class CompanyPrestige(Base):
     __tablename__ = "company_prestige"
     __table_args__ = (
-        CheckConstraint("prestige_level >= 1 AND prestige_level <= 10", name="ck_company_prestige_prestige_level_range"),
+        CheckConstraint(
+            "prestige_level >= 1 AND prestige_level <= 10",
+            name="ck_company_prestige_prestige_level_range",
+        ),
     )
 
     company_id = mapped_column(
@@ -54,5 +68,6 @@ class CompanyPrestige(Base):
         nullable=False,
         default=Decimal("1.000"),
     )
+
 
 __all__ = ["Domain", "Company", "CompanyPrestige"]

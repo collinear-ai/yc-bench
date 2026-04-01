@@ -40,3 +40,8 @@ include = [
     "README.md",
     "pyproject.toml",
 ]
+
+[dependency-groups]
+dev = [
+    "black>=26.3.1",
+]

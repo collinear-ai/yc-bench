@@ -45,12 +45,16 @@ class GeneratedClient:
     loyalty: float = 0.0  # hidden loyalty score in [-1.0, 1.0]
 
 
-def generate_clients(*, run_seed: int, count: int, cfg: WorldConfig) -> list[GeneratedClient]:
+def generate_clients(
+    *, run_seed: int, count: int, cfg: WorldConfig
+) -> list[GeneratedClient]:
     """Generate clients with seeded reward multipliers, tiers, specialty domains, and loyalty."""
     if count <= 0:
         return []
     if count > len(_CLIENT_NAME_POOL):
-        raise ValueError(f"count ({count}) exceeds available client names ({len(_CLIENT_NAME_POOL)})")
+        raise ValueError(
+            f"count ({count}) exceeds available client names ({len(_CLIENT_NAME_POOL)})"
+        )
 
     streams = RngStreams(run_seed)
     rng = streams.stream("clients")
@@ -63,8 +67,14 @@ def generate_clients(*, run_seed: int, count: int, cfg: WorldConfig) -> list[Gen
 
     clients = []
     for i, name in enumerate(names):
-        mult = round(rng.triangular(cfg.client_reward_mult_low, cfg.client_reward_mult_high,
-                                     cfg.client_reward_mult_mode), 2)
+        mult = round(
+            rng.triangular(
+                cfg.client_reward_mult_low,
+                cfg.client_reward_mult_high,
+                cfg.client_reward_mult_mode,
+            ),
+            2,
+        )
         tier = _tier_from_multiplier(mult, cfg)
         n_specialties = 1 if rng.random() < cfg.client_single_specialty_prob else 2
         specialties = [d.value for d in rng.sample(_ALL_DOMAINS, n_specialties)]
@@ -78,13 +88,15 @@ def generate_clients(*, run_seed: int, count: int, cfg: WorldConfig) -> list[Gen
             # Non-RAT: loyalty in [-0.3, 1.0]
             loyalty = round(rng.triangular(-0.3, 1.0, cfg.loyalty_mode), 3)
 
-        clients.append(GeneratedClient(
-            name=name,
-            reward_multiplier=mult,
-            tier=tier,
-            specialty_domains=specialties,
-            loyalty=loyalty,
-        ))
+        clients.append(
+            GeneratedClient(
+                name=name,
+                reward_multiplier=mult,
+                tier=tier,
+                specialty_domains=specialties,
+                loyalty=loyalty,
+            )
+        )
     # Shuffle so RATs aren't always first in the list
     rng.shuffle(clients)
     return clients

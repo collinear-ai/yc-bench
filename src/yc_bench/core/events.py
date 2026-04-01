@@ -3,6 +3,7 @@
 Events are processed in deterministic order: (scheduled_at, priority, id).
 Priority by event_type: task_completed=0, bankruptcy=1, task_half=2, horizon_end=3.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -100,16 +101,22 @@ def insert_event(
     the existing event is returned unchanged.
     """
     if dedupe_key is not None:
-        existing = db.query(SimEvent).filter(
-            SimEvent.company_id == company_id,
-            SimEvent.dedupe_key == dedupe_key,
-            SimEvent.consumed == False,
-        ).first()
+        existing = (
+            db.query(SimEvent)
+            .filter(
+                SimEvent.company_id == company_id,
+                SimEvent.dedupe_key == dedupe_key,
+                SimEvent.consumed == False,
+            )
+            .first()
+        )
         if existing is not None:
             return existing
 
     event = SimEvent(
-        id=_deterministic_event_id(company_id, event_type, scheduled_at, dedupe_key, payload),
+        id=_deterministic_event_id(
+            company_id, event_type, scheduled_at, dedupe_key, payload
+        ),
         company_id=company_id,
         event_type=event_type,
         scheduled_at=scheduled_at,

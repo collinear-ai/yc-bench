@@ -23,22 +23,30 @@ def client_list():
         clients = db.query(Client).order_by(Client.name).all()
         results = []
         for c in clients:
-            ct = db.query(ClientTrust).filter(
-                ClientTrust.company_id == sim_state.company_id,
-                ClientTrust.client_id == c.id,
-            ).one_or_none()
-            results.append({
-                "client_id": str(c.id),
-                "name": c.name,
-                "trust_level": float(ct.trust_level) if ct else 0.0,
-                "tier": c.tier,
-                "specialties": c.specialty_domains or [],
-            })
+            ct = (
+                db.query(ClientTrust)
+                .filter(
+                    ClientTrust.company_id == sim_state.company_id,
+                    ClientTrust.client_id == c.id,
+                )
+                .one_or_none()
+            )
+            results.append(
+                {
+                    "client_id": str(c.id),
+                    "name": c.name,
+                    "trust_level": float(ct.trust_level) if ct else 0.0,
+                    "tier": c.tier,
+                    "specialties": c.specialty_domains or [],
+                }
+            )
 
-        json_output({
-            "count": len(results),
-            "clients": results,
-        })
+        json_output(
+            {
+                "count": len(results),
+                "clients": results,
+            }
+        )
 
 
 @client_app.command("history")
@@ -55,35 +63,53 @@ def client_history():
 
         for c in clients:
             # Count successes and failures
-            success_count = db.query(func.count(Task.id)).filter(
-                Task.company_id == company_id,
-                Task.client_id == c.id,
-                Task.status == TaskStatus.COMPLETED_SUCCESS,
-            ).scalar() or 0
+            success_count = (
+                db.query(func.count(Task.id))
+                .filter(
+                    Task.company_id == company_id,
+                    Task.client_id == c.id,
+                    Task.status == TaskStatus.COMPLETED_SUCCESS,
+                )
+                .scalar()
+                or 0
+            )
 
-            fail_count = db.query(func.count(Task.id)).filter(
-                Task.company_id == company_id,
-                Task.client_id == c.id,
-                Task.status == TaskStatus.COMPLETED_FAIL,
-            ).scalar() or 0
+            fail_count = (
+                db.query(func.count(Task.id))
+                .filter(
+                    Task.company_id == company_id,
+                    Task.client_id == c.id,
+                    Task.status == TaskStatus.COMPLETED_FAIL,
+                )
+                .scalar()
+                or 0
+            )
 
-            ct = db.query(ClientTrust).filter(
-                ClientTrust.company_id == company_id,
-                ClientTrust.client_id == c.id,
-            ).one_or_none()
+            ct = (
+                db.query(ClientTrust)
+                .filter(
+                    ClientTrust.company_id == company_id,
+                    ClientTrust.client_id == c.id,
+                )
+                .one_or_none()
+            )
 
             total = success_count + fail_count
             fail_rate = round(fail_count / total * 100, 1) if total > 0 else 0.0
 
-            results.append({
-                "client_name": c.name,
-                "trust_level": float(ct.trust_level) if ct else 0.0,
-                "tasks_succeeded": success_count,
-                "tasks_failed": fail_count,
-                "failure_rate_pct": fail_rate,
-            })
+            results.append(
+                {
+                    "client_name": c.name,
+                    "trust_level": float(ct.trust_level) if ct else 0.0,
+                    "tasks_succeeded": success_count,
+                    "tasks_failed": fail_count,
+                    "failure_rate_pct": fail_rate,
+                }
+            )
 
-        json_output({
-            "count": len(results),
-            "client_history": results,
-        })
+        json_output(
+            {
+                "count": len(results),
+                "client_history": results,
+            }
+        )

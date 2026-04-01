@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+
 @dataclass(frozen=True)
 class RuntimeSettings:
     model: str
@@ -15,11 +16,13 @@ class RuntimeSettings:
     # Optional system prompt override; None = use default from agent/prompt.py
     system_prompt: str | None = None
 
+
 @dataclass(frozen=True)
 class RuntimeTurnRequest:
     session_id: str
     user_input: str
     scratchpad: str | None = None
+
 
 @dataclass(frozen=True)
 class RuntimeTurnResult:
@@ -28,6 +31,7 @@ class RuntimeTurnResult:
     checkpoint_advanced: bool = False
     resume_payload: dict | None = None
     turn_cost_usd: float = 0.0
+
 
 @dataclass(frozen=True)
 class CommandResult:
@@ -38,4 +42,10 @@ class CommandResult:
     sim_time: str | None
     command: str
 
-__all__ = ["RuntimeSettings", "RuntimeTurnRequest", "RuntimeTurnResult", "CommandResult"]
+
+__all__ = [
+    "RuntimeSettings",
+    "RuntimeTurnRequest",
+    "RuntimeTurnResult",
+    "CommandResult",
+]

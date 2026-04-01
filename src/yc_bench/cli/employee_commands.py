@@ -19,9 +19,9 @@ def employee_list():
         if sim_state is None:
             error_output("No simulation found.")
 
-        employees = db.query(Employee).filter(
-            Employee.company_id == sim_state.company_id
-        ).all()
+        employees = (
+            db.query(Employee).filter(Employee.company_id == sim_state.company_id).all()
+        )
 
         results = []
         for emp in employees:
@@ -38,23 +38,29 @@ def employee_list():
             active_tasks = [t.title for t in active_assignments]
 
             # Skill rates per domain
-            skill_rows = db.query(EmployeeSkillRate).filter(
-                EmployeeSkillRate.employee_id == emp.id
-            ).all()
+            skill_rows = (
+                db.query(EmployeeSkillRate)
+                .filter(EmployeeSkillRate.employee_id == emp.id)
+                .all()
+            )
             skill_rates = {
                 r.domain.value: round(float(r.rate_domain_per_hour), 2)
                 for r in skill_rows
             }
 
-            results.append({
-                "name": emp.name,
-                "tier": emp.tier,
-                "salary_cents": emp.salary_cents,
-                "skill_rates": skill_rates,
-                "active_tasks": active_tasks,
-            })
+            results.append(
+                {
+                    "name": emp.name,
+                    "tier": emp.tier,
+                    "salary_cents": emp.salary_cents,
+                    "skill_rates": skill_rates,
+                    "active_tasks": active_tasks,
+                }
+            )
 
-        json_output({
-            "count": len(results),
-            "employees": results,
-        })
+        json_output(
+            {
+                "count": len(results),
+                "employees": results,
+            }
+        )

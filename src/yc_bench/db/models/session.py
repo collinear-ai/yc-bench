@@ -2,15 +2,24 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Uuid, Date, Enum as SAEnum
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    String,
+    Uuid,
+    Date,
+    Enum as SAEnum,
+)
 from sqlalchemy.orm import mapped_column
 
 from ..base import Base
 from .event import EventType
 
+
 class Session(Base):
     __tablename__ = "sessions"
-    
+
     id = mapped_column(
         Uuid(as_uuid=True),
         primary_key=True,
@@ -30,13 +39,16 @@ class Session(Base):
         nullable=True,
     )
     wake_reason = mapped_column(
-        SAEnum(EventType, name="event_type", values_callable=lambda e: [x.value for x in e]),
+        SAEnum(
+            EventType, name="event_type", values_callable=lambda e: [x.value for x in e]
+        ),
         nullable=False,
     )
-    
+
+
 class MonthlyMetric(Base):
     __tablename__ = "monthly_metrics"
-    
+
     company_id = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("companies.id", ondelete="CASCADE"),
@@ -64,5 +76,6 @@ class MonthlyMetric(Base):
         BigInteger,
         nullable=False,
     )
+
 
 __all__ = ["Session", "MonthlyMetric"]

@@ -23,28 +23,53 @@ def _snapshot_state(db: Session, company_id):
     sim_state = db.query(SimState).filter(SimState.company_id == company_id).one()
     company = db.query(Company).filter(Company.id == company_id).one()
 
-    active_count = db.query(func.count(Task.id)).filter(
-        Task.company_id == company_id,
-        Task.status == TaskStatus.ACTIVE,
-    ).scalar() or 0
+    active_count = (
+        db.query(func.count(Task.id))
+        .filter(
+            Task.company_id == company_id,
+            Task.status == TaskStatus.ACTIVE,
+        )
+        .scalar()
+        or 0
+    )
 
-    planned_count = db.query(func.count(Task.id)).filter(
-        Task.company_id == company_id,
-        Task.status == TaskStatus.PLANNED,
-    ).scalar() or 0
+    planned_count = (
+        db.query(func.count(Task.id))
+        .filter(
+            Task.company_id == company_id,
+            Task.status == TaskStatus.PLANNED,
+        )
+        .scalar()
+        or 0
+    )
 
-    employee_count = db.query(func.count(Employee.id)).filter(
-        Employee.company_id == company_id,
-    ).scalar() or 0
+    employee_count = (
+        db.query(func.count(Employee.id))
+        .filter(
+            Employee.company_id == company_id,
+        )
+        .scalar()
+        or 0
+    )
 
-    monthly_payroll = db.query(func.sum(Employee.salary_cents)).filter(
-        Employee.company_id == company_id,
-    ).scalar() or 0
+    monthly_payroll = (
+        db.query(func.sum(Employee.salary_cents))
+        .filter(
+            Employee.company_id == company_id,
+        )
+        .scalar()
+        or 0
+    )
 
     # Read scratchpad if it exists
     from ..db.models.scratchpad import Scratchpad
-    scratchpad = db.query(Scratchpad).filter(Scratchpad.company_id == company_id).one_or_none()
-    scratchpad_content = scratchpad.content if scratchpad and scratchpad.content else None
+
+    scratchpad = (
+        db.query(Scratchpad).filter(Scratchpad.company_id == company_id).one_or_none()
+    )
+    scratchpad_content = (
+        scratchpad.content if scratchpad and scratchpad.content else None
+    )
 
     return {
         "sim_time": sim_state.sim_time.isoformat(),
@@ -131,13 +156,18 @@ def run_agent_loop(
 
     logger.info(
         "Starting agent loop: model=%s seed=%d auto_advance_after=%d turns max_turns=%s",
-        run_state.model, run_state.seed, auto_advance_after_turns, max_turns or "unlimited",
+        run_state.model,
+        run_state.seed,
+        auto_advance_after_turns,
+        max_turns or "unlimited",
     )
 
     while not run_state.terminal:
         if max_turns is not None and run_state.turn_count >= max_turns:
             logger.info("Reached max_turns=%d, stopping.", max_turns)
-            run_state.mark_terminal(TerminalReason.ERROR, f"max_turns={max_turns} reached")
+            run_state.mark_terminal(
+                TerminalReason.ERROR, f"max_turns={max_turns} reached"
+            )
             break
         turn_num = run_state.turn_count + 1
         if run_state.turn_count == 0:
@@ -180,10 +210,14 @@ def run_agent_loop(
             turns_since_resume = 0
         else:
             turns_since_resume += 1
-            if command_executor is not None and turns_since_resume >= auto_advance_after_turns:
+            if (
+                command_executor is not None
+                and turns_since_resume >= auto_advance_after_turns
+            ):
                 logger.info(
                     "Turn %d: %d consecutive turns without sim resume; auto-advancing.",
-                    turn_num, turns_since_resume,
+                    turn_num,
+                    turns_since_resume,
                 )
                 resume_payload, err = _auto_resume(command_executor)
                 if err:
@@ -227,7 +261,9 @@ def run_agent_loop(
 
         logger.info(
             "Turn %d complete. Agent output length: %d, commands: %d",
-            turn_num, len(agent_output), len(commands_executed),
+            turn_num,
+            len(agent_output),
+            len(commands_executed),
         )
 
     logger.info(
