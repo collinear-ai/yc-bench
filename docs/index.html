@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YC-Bench: A Long-Horizon Agent Benchmark</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #E8864A;
+      --primary-dark: #d0733a;
+      --primary-light: #FAFAF5;
+      --success: #16a34a;
+      --accent: #8F9E98;
+      --text: #1A1A1A;
+      --text-secondary: #6B6560;
+      --text-muted: #8F9E98;
+      --border: #D4C8B8;
+      --bg: #ffffff;
+      --bg-alt: #FAFAF5;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, sans-serif; color: var(--text); margin: 0; }
+
+    /* Nav */
+    .topnav {
+      position: sticky; top: 0; z-index: 100; background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 12px 0;
+    }
+    .topnav .container { display: flex; align-items: center; justify-content: space-between; }
+    .topnav-brand { font-weight: 800; font-size: 1.1rem; color: var(--text); text-decoration: none; }
+    .topnav-links { display: flex; gap: 24px; }
+    .topnav-links a { font-size: 0.88rem; font-weight: 500; color: var(--text-secondary); text-decoration: none; transition: color 0.15s; }
+    .topnav-links a:hover { color: var(--primary); }
+
+    /* Hero */
+    .hero-section {
+      padding: 80px 0 32px; text-align: center;
+      background: var(--bg);
+    }
+    .hero-section h1 { font-size: 3.5rem; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 12px; }
+    .hero-section .tagline { font-size: 1.2rem; color: var(--text-secondary); max-width: 650px; margin: 0 auto 12px; line-height: 1.6; }
+    .publication-links { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 24px; }
+    .publication-links .button {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 18px; border-radius: 20px; font-size: 0.9rem; font-weight: 500;
+      text-decoration: none; transition: all 0.15s; border: none; cursor: pointer;
+      font-family: 'Inter', sans-serif;
+    }
+    .publication-links .button.is-dark { background: #1A1A1A; color: #fff; }
+    .publication-links .button.is-dark:hover { background: #E8864A; }
+    .publication-links .button .icon { display: inline-flex; align-items: center; font-size: 0.85rem; }
+    .publication-links .button.is-light { background: #f5f5f5; color: #363636; }
+    .publication-links .button.is-light:hover { background: #e8e8e8; }
+
+    .stats-bar { display: flex; justify-content: center; gap: 48px; margin-top: 48px; padding: 24px 0; border-top: 1px solid var(--border); }
+    .stat-item { text-align: center; }
+    .stat-value { font-size: 1.8rem; font-weight: 800; }
+    .stat-label { font-size: 0.8rem; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+    /* Sections */
+    .section-block { padding: 64px 0; }
+    .section-block.alt { background: var(--bg-alt); }
+    .section-title { font-size: 1.6rem; font-weight: 800; text-align: center; margin-bottom: 12px; letter-spacing: -0.01em; }
+    .section-subtitle { font-size: 1rem; color: var(--text-secondary); text-align: center; max-width: 600px; margin: 0 auto 40px; line-height: 1.6; }
+
+    /* Abstract */
+    .abstract-text { max-width: 780px; margin: 0 auto; font-size: 1.02rem; line-height: 1.8; color: #475569; text-align: justify; }
+
+    /* Tabs - Streamlit style */
+    .tab-bar { display: inline-flex; gap: 0; margin-bottom: 32px; border-bottom: 2px solid var(--border); margin-left: 50%; transform: translateX(-50%); }
+    .tab-btn {
+      padding: 10px 24px; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      font-size: 0.92rem; font-weight: 600; cursor: pointer; background: transparent;
+      color: var(--text-muted); transition: all 0.15s; font-family: 'Inter', sans-serif;
+    }
+    .tab-btn.active { color: #E8864A; border-bottom-color: #E8864A; }
+    .tab-btn:hover:not(.active) { color: var(--text-secondary); border-bottom-color: #D4C8B8; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Chart */
+    .chart-wrapper { max-width: 960px; margin: 0 auto; position: relative; }
+    .chart-wrapper canvas { width: 100% !important; }
+
+    /* Leaderboard */
+    .leaderboard-wrapper { max-width: 1100px; margin: 0 auto; }
+    .leaderboard-table {
+      width: 100%; border-collapse: separate; border-spacing: 0 8px;
+      font-size: 0.92rem;
+    }
+    .leaderboard-table thead th {
+      padding: 12px 20px; font-weight: 600; font-size: 0.8rem;
+      text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+      cursor: pointer; white-space: nowrap; user-select: none; transition: color 0.15s;
+      text-align: left;
+    }
+    .leaderboard-table thead th:hover { color: var(--primary); }
+    .leaderboard-table thead th .sort-icon { font-size: 0.65rem; margin-left: 4px; opacity: 0.3; }
+    .leaderboard-table thead th.sorted .sort-icon { opacity: 1; color: var(--primary); }
+    .leaderboard-table tbody tr {
+      background: var(--bg); border-radius: 10px; transition: box-shadow 0.15s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .leaderboard-table tbody tr:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .leaderboard-table tbody tr.rank-1 { background: #FEF6F0; box-shadow: 0 1px 4px rgba(232,134,74,0.15); }
+    .leaderboard-table tbody td { padding: 16px 20px; }
+    .leaderboard-table tbody td:first-child { border-radius: 10px 0 0 10px; }
+    .leaderboard-table tbody td:last-child { border-radius: 0 10px 10px 0; }
+    .rank-num { font-size: 1.1rem; font-weight: 700; color: var(--text-muted); min-width: 32px; display: inline-block; text-align: center; }
+    .rank-num.gold { color: #E8864A; }
+    .rank-star { color: #E8864A; font-size: 0.75rem; margin-left: 2px; }
+    .model-cell { display: flex; flex-direction: column; gap: 2px; }
+    .model-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .model-provider { font-size: 0.8rem; color: var(--text-muted); }
+    .funds-value { font-weight: 700; font-size: 1.05rem; color: var(--success); }
+    .funds-value.negative { color: #ef4444; }
+    .funds-std { font-size: 0.8rem; color: var(--text-muted); font-weight: 400; }
+    .bankrupt-zero { color: var(--success); font-weight: 500; }
+    .bankrupt-some { color: #ef4444; font-weight: 600; }
+
+    /* Figures */
+    .figure-container { text-align: center; margin: 32px 0; }
+    .figure-container img { max-width: 100%; border-radius: 12px; }
+    .figure-container img.with-shadow { box-shadow: 0 2px 16px rgba(0,0,0,0.06); }
+    .figure-caption { font-size: 0.88rem; color: var(--text-secondary); margin-top: 12px; max-width: 750px; margin-left: auto; margin-right: auto; line-height: 1.6; }
+
+    /* Citation - Nerfies style */
+    .citation-section { max-width: 900px; margin: 0 auto; text-align: left; }
+    .citation-section h3 { font-size: 1.5rem; font-weight: 800; margin-bottom: 20px; }
+    .citation-block {
+      background: #f5f5f5; border-radius: 4px; padding: 28px 32px;
+      font-family: 'SFMono-Regular', 'Menlo', 'Consolas', 'Liberation Mono', monospace;
+      font-size: 0.92rem; line-height: 1.75; position: relative; white-space: pre-wrap; color: #000;
+      font-weight: 500;
+      border: none; overflow-x: auto;
+    }
+
+    footer { padding: 40px 0; text-align: center; font-size: 0.85rem; color: var(--text-muted); border-top: 1px solid var(--border); background: var(--bg-alt); }
+    footer a { color: #E8864A; text-decoration: none; }
+
+    @media (max-width: 768px) {
+      .hero-section h1 { font-size: 2.2rem; }
+      .stats-bar { gap: 20px; flex-wrap: wrap; }
+      .stat-value { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+
+
+<section class="hero-section">
+  <div class="container">
+    <h1><img src="static/images/yc_bench.png" alt="YC-Bench logo" style="height: 1em; vertical-align: -0.1em; margin-right: 8px;"><span id="catTrigger" style="cursor: pointer; color: #E8864A; transition: opacity 0.3s; text-decoration: underline; text-underline-offset: 4px;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">YC-Bench</span>: Benchmarking AI Agents for Long-Term Planning and Consistent Execution</h1>
+    <p style="font-size: 1.05rem; color: var(--text-secondary); margin-bottom: 4px;"><a href="https://riddlehe.github.io/" style="color: var(--text-secondary); text-decoration: none; border-bottom: 1.5px solid #D4C8B8;">Muyu He</a>, <a href="https://aditj.github.io/" style="color: var(--text-secondary); text-decoration: none; border-bottom: 1.5px solid #D4C8B8;">Adit Jain</a>, <a href="https://anandk27.github.io/" style="color: var(--text-secondary); text-decoration: none; border-bottom: 1.5px solid #D4C8B8;">Anand Kumar</a>, <a href="https://www.linkedin.com/in/vincent-tu-422b18208/" style="color: var(--text-secondary); text-decoration: none; border-bottom: 1.5px solid #D4C8B8;">Vincent Tu</a>, <a href="https://www.linkedin.com/in/soumyadeep-bakshi/" style="color: var(--text-secondary); text-decoration: none; border-bottom: 1.5px solid #D4C8B8;">Soumyadeep Bakshi</a>, <a href="https://www.linkedin.com/in/sachinpatro/" style="color: var(--text-secondary); text-decoration: none; border-bottom: 1.5px solid #D4C8B8;">Sachin Patro</a>, <a href="https://www.nazneenrajani.com/" style="color: var(--text-secondary); text-decoration: none; border-bottom: 1.5px solid #D4C8B8;">Nazneen Rajani</a></p>
+    <p style="font-size: 0.88rem; margin-bottom: 16px;"><a href="https://www.collinear.ai/" style="color: #E8864A; text-decoration: none;">Collinear AI</a></p>
+    <div class="publication-links">
+      <a href="#" class="button is-dark is-rounded">
+        <span class="icon"><i class="fas fa-file-pdf"></i></span>
+        <span>Paper</span>
+      </a>
+      <a href="#" class="button is-dark is-rounded">
+        <span class="icon"><i class="ai ai-arxiv"></i></span>
+        <span>arXiv</span>
+      </a>
+      <a href="https://github.com/collinear-ai/yc-bench" class="button is-dark is-rounded">
+        <span class="icon"><i class="fab fa-github"></i></span>
+        <span>Code</span>
+      </a>
+      <a href="https://huggingface.co/datasets/collinear-ai/yc-bench" class="button is-dark is-rounded">
+        <span class="icon"><i class="far fa-images"></i></span>
+        <span>Dataset</span>
+      </a>
+      <a href="#leaderboard" class="button is-dark is-rounded">
+        <span class="icon"><i class="fas fa-trophy"></i></span>
+        <span>Leaderboard</span>
+      </a>
+    </div>
+    <div class="figure-container" style="margin-top: 32px; margin-bottom: 0;">
+      <img src="static/images/system_architecture.png" alt="YC-Bench System Architecture" style="max-width: 665px;">
+    </div>
+  </div>
+</section>
+
+<section class="section-block" id="abstract">
+  <div class="container">
+    <h2 class="section-title">Abstract</h2>
+    <p class="abstract-text">
+      As LLM agents tackle increasingly complex tasks, a critical question is whether they can maintain strategic coherence over long horizons: planning under uncertainty, learning from delayed feedback, and adapting when early mistakes compound. We introduce <strong>YC-Bench</strong>, a benchmark that evaluates these capabilities by tasking an agent with running a simulated startup over a one-year horizon spanning hundreds of turns. The agent must manage employees, select task contracts, and maintain profitability in a partially observable environment where adversarial clients and growing payroll create compounding consequences for poor decisions. We evaluate 12 models, both proprietary and open-source, across 3 seeds each. Only three models consistently surpass the starting capital of $200K, with Claude Opus 4.6 achieving the highest average final funds at $1.27M, followed by GLM-5 at $1.21M with 11&times; lower inference cost. Scratchpad usage, the sole mechanism for persisting information across context truncation, is the strongest predictor of success, and adversarial client detection is the primary failure mode, accounting for 47% of bankruptcies. Our analysis reveals that frontier models still fail through distinct failure modes such as over-parallelization, demonstrating the capability gaps for long-horizon performance. YC-Bench is open-source, reproducible, and configurable.
+    </p>
+  </div>
+</section>
+
+<section class="section-block alt" id="leaderboard">
+  <div class="container">
+    <h2 class="section-title">Leaderboard</h2>
+    <p class="section-subtitle">Average net worth across 3 seeds. All models start with $200K.</p>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('table')">Table</button>
+      <button class="tab-btn" onclick="switchTab('chart')">Net Worth Over Time</button>
+    </div>
+
+    <!-- Table tab -->
+    <div class="tab-content active" id="tab-table">
+      <div class="leaderboard-wrapper">
+        <table class="leaderboard-table" id="leaderboardTable">
+          <thead>
+            <tr>
+              <th onclick="sortTable(0,'num')" style="width: 60px;">Rank <span class="sort-icon"><i class="fas fa-sort"></i></span></th>
+              <th onclick="sortTable(1,'str')">Model <span class="sort-icon"><i class="fas fa-sort"></i></span></th>
+              <th onclick="sortTable(2,'num')" class="sorted">Net Worth <span class="sort-icon"><i class="fas fa-sort-down"></i></span></th>
+              <th onclick="sortTable(3,'num')">Bankrupt <span class="sort-icon"><i class="fas fa-sort"></i></span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="rank-1"><td><span class="rank-num gold">1</span><span class="rank-star">&#9733;</span></td><td><div class="model-cell"><span class="model-name">Claude Opus 4.6</span><span class="model-provider">Anthropic</span></div></td><td><span class="funds-value">$1.27M</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">2</span></td><td><div class="model-cell"><span class="model-name">GLM-5</span><span class="model-provider">Zhipu AI</span></div></td><td><span class="funds-value">$1.21M</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">3</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$1.00M</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">4</span></td><td><div class="model-cell"><span class="model-name">Kimi-K2.5</span><span class="model-provider">Moonshot AI</span></div></td><td><span class="funds-value">$409K</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">5</span></td><td><div class="model-cell"><span class="model-name">Gemini 3 Flash</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$394K</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">6</span></td><td><div class="model-cell"><span class="model-name">Gemini 3.1 Flash Lite</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$203K</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">7</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4 Mini</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$138K</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">8</span></td><td><div class="model-cell"><span class="model-name">Claude Sonnet 4.6</span><span class="model-provider">Anthropic</span></div></td><td><span class="funds-value">$104K</span></td><td><span class="bankrupt-some">2/3</span></td></tr>
+            <tr><td><span class="rank-num">9</span></td><td><div class="model-cell"><span class="model-name">Qwen 3.5-397B</span><span class="model-provider">Alibaba</span></div></td><td><span class="funds-value">$91K</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">10</span></td><td><div class="model-cell"><span class="model-name">Gemini 3.1 Pro</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$66K</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">11</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4 Nano</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$39K</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">12</span></td><td><div class="model-cell"><span class="model-name">Grok 4.20 Beta</span><span class="model-provider">xAI</span></div></td><td><span class="funds-value">$25K</span></td><td><span class="bankrupt-some">2/3</span></td></tr>
+            <tr><td><span class="rank-num" style="color:#ccc">-</span></td><td><div class="model-cell"><span class="model-name" style="color:var(--text-muted)">Greedy Bot</span><span class="model-provider">Baseline</span></div></td><td><span class="funds-value negative">$0</span></td><td><span class="bankrupt-some">3/3</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Chart tab -->
+    <div class="tab-content" id="tab-chart">
+      <div class="chart-wrapper">
+        <canvas id="fundsChart" height="420"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- Analysis -->
+<section class="section-block" id="analysis">
+  <div class="container">
+    <h2 class="section-title">Key Findings</h2>
+
+    <!-- Trust -->
+    <div style="max-width: 960px; margin: 0 auto 56px;">
+      <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Only a few models build client trust; most choose clients indiscriminately</h3>
+      <p style="color: #475569; line-height: 1.7; font-size: 0.95rem; margin-bottom: 24px;">
+        Tasks that require trust come with higher rewards and smaller workloads, yet most models maintain minimal trust (level 1&ndash;2) with all clients instead of specializing. Only 4 out of 10 models across 6 out of 30 runs explicitly maintain a whitelist of preferred clients in their scratchpad. The rest distribute tasks indiscriminately, barring themselves from the highest-return tasks.
+      </p>
+      <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
+        <div style="flex: 1; min-width: 300px; text-align: center;">
+          <img src="static/images/trust_combined-a.png" alt="Trust task ratio" style="max-width: 100%; border-radius: 8px;">
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px;">Proportion of completed tasks requiring client trust.</p>
+        </div>
+        <div style="flex: 1; min-width: 300px; text-align: center;">
+          <img src="static/images/trust_combined-b.png" alt="Trust levels per client" style="max-width: 100%; border-radius: 8px;">
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px;">Final trust level per client averaged across seeds (ADV = adversarial).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Adversarial -->
+    <div style="max-width: 960px; margin: 0 auto 56px;">
+      <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Identifying adversarial clients remains a challenge for all but a few models</h3>
+      <p style="color: #475569; line-height: 1.7; font-size: 0.95rem; margin-bottom: 24px;">
+        Half of all models accept adversarial tasks at a rate higher than their natural market share (~32%), showing indifference or misjudgment. Two-thirds of all runs make no mention of blacklisting any adversarial client. However, the top three models accept adversarial tasks at 1/4 the rate of the next best model &ndash;they correctly spot the work quantity inflation and write explicit avoidance guidelines to their scratchpad.
+      </p>
+      <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
+        <div style="flex: 1; min-width: 300px; text-align: center;">
+          <img src="static/images/adversarial_combined-a.png" alt="Adversarial task ratio" style="max-width: 100%; border-radius: 8px;">
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px;">Ratio of adversarial tasks among all accepted tasks. Dashed line = natural market share (~32%).</p>
+        </div>
+        <div style="flex: 1; min-width: 300px; text-align: center;">
+          <img src="static/images/adversarial_combined-b.png" alt="Client selection policy" style="max-width: 100%; border-radius: 8px;">
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px;">Client selection policy observed in agent scratchpads per seed.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Failure modes & Cost -->
+    <div style="max-width: 960px; margin: 0 auto 56px;">
+      <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Suboptimal employee assignment is the second-largest failure mode; cost efficiency varies dramatically</h3>
+      <p style="color: #475569; line-height: 1.7; font-size: 0.95rem; margin-bottom: 24px;">
+        Beyond adversarial clients, 7 out of 11 models fail substantially from assigning employees whose productivity cannot meet deadlines, or from spreading employees across too many concurrent tasks. Models have perfect information about employee skills and task requirements, so these failures stem from poor estimation, not missing data. On cost efficiency, Kimi-K2.5 achieves 2.5&times; more revenue per API dollar than the next best model, while GLM-5 is 11&times; more cost-efficient than top-ranked Opus despite near-identical performance.
+      </p>
+      <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
+        <div style="flex: 1; min-width: 300px; text-align: center;">
+          <img src="static/images/failure_and_cost-a.png" alt="Failure modes" style="max-width: 100%; border-radius: 8px;">
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px;">Failure mode breakdown: adversarial, wrong staffing, and over-split.</p>
+        </div>
+        <div style="flex: 1; min-width: 300px; text-align: center;">
+          <img src="static/images/failure_and_cost-b.png" alt="Cost efficiency" style="max-width: 100%; border-radius: 8px;">
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px;">Cost efficiency: in-game revenue per dollar of API cost.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error analysis -->
+    <div style="max-width: 960px; margin: 0 auto 56px;">
+      <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Four failure profiles reveal a spectrum of long-horizon incoherence</h3>
+      <p style="color: #475569; line-height: 1.7; font-size: 0.95rem; margin-bottom: 24px;">
+        Opus rewrites its scratchpad ~34 times per run but occasionally violates its own blacklist. Flash executes a rigid 4-command loop every turn with zero adaptation, surviving through sheer throughput. Sonnet exhibits a <em>reasoning&ndash;execution gap</em>: it derives correct rules then immediately ignores them, averaging 7.2 concurrent tasks while its scratchpad says "one task at a time." Grok shows <em>aware inaction</em>: its scratchpad accurately diagnoses critical issues but it takes no corrective action, going bankrupt with just 6 days of runway after accepting a 0%-success-rate client.
+      </p>
+      <div style="text-align: center;">
+        <img src="static/images/error_analysis_grid.png" alt="Error analysis grid" style="max-width: 100%; border-radius: 8px;">
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 6px;">Representative failure moments for four models: scratchpad state, agent action, and outcome.</p>
+      </div>
+    </div>
+
+    <!-- Pipeline -->
+    <div style="max-width: 820px; margin: 0 auto;">
+      <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">Long-horizon coherence is a pipeline, and models fail at different stages</h3>
+      <p style="color: #475569; line-height: 1.7; font-size: 0.95rem;">
+        Flash fails from the absence of reflection. Grok fails despite accurate reflection, unable to close the loop between diagnosis and action. Sonnet fails from temporally inconsistent reflection &ndash;rules written and immediately abandoned. Only Opus achieves sustained, self-correcting reflection. This suggests long-horizon coherence is not a single capability but a pipeline: <em>perceive &rarr; record &rarr; retrieve &rarr; act consistently</em>, and current models fail at different stages.
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- Getting Started -->
+<section class="section-block alt" id="evaluate">
+  <div class="container">
+    <h2 class="section-title">Evaluate Your Model</h2>
+    <div style="max-width: 780px; margin: 0 auto; font-size: 0.95rem; color: #475569; line-height: 1.8;">
+      <p>YC-Bench is open-source and works with any LiteLLM-compatible model. To run an evaluation:</p>
+      <pre style="background: #1e293b; color: #e2e8f0; border-radius: 10px; padding: 20px 24px; margin: 20px 0; font-size: 0.85rem; line-height: 1.6; overflow-x: auto;"><code>git clone https://github.com/collinear-ai/yc-bench
+cd yc-bench && uv sync
+
+# Set your API key
+export OPENAI_API_KEY="sk-..."  # or ANTHROPIC_API_KEY, GEMINI_API_KEY, etc.
+
+# Run a single evaluation
+uv run yc-bench run --model openai/gpt-5.4 --seed 1 --config medium
+
+# Run all 3 seeds
+for seed in 1 2 3; do
+  uv run yc-bench run --model openai/gpt-5.4 --seed $seed --config medium
+done</code></pre>
+      <p>Each run produces a JSON result file in <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">results/</code> and a SQLite database in <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">db/</code>. The benchmark uses the <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">medium</code> preset by default (moderate deadline pressure, 200 market tasks, 8 employees). See the <a href="https://github.com/collinear-ai/yc-bench" style="color: var(--primary); text-decoration: none; font-weight: 500;">README</a> for full configuration options and preset descriptions.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section-block" id="citation">
+  <div class="container">
+    <div class="citation-section">
+      <h3>BibTeX</h3>
+      <div class="citation-block" id="citationText">@misc{collinear-ai2025ycbench,
+  author    = {He, Muyu and Jain, Adit and Kumar, Anand and Tu, Vincent and Bakshi, Soumyadeep and Patro, Sachin and Rajani, Nazneen},
+  title     = {{YC-Bench}: Benchmarking {AI} Agents for Long-Term Planning and Consistent Execution},
+  year      = {2025},
+  howpublished = {\url{https://github.com/collinear-ai/yc-bench}},
+}</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p style="margin-bottom:4px">YC-Bench &copy; 2026 <a href="https://github.com/collinear-ai">Collinear AI</a></p>
+    <p>Licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a></p>
+  </div>
+</footer>
+
+<script>
+// Model colors and display names
+const MODEL_CONFIG = {
+  'claude-opus-4-6':              { name: 'Claude Opus 4.6',       color: '#ff6b8a', width: 3, logo: 'static/images/logos/claude-color.png' },
+  'glm-5':                        { name: 'GLM-5',                 color: '#8b8d93', width: 3, logo: 'static/images/logos/Z.ai_(company_logo).svg.png' },
+  'gpt-5.4':                      { name: 'GPT-5.4',               color: '#4da6ff', width: 3, logo: 'static/images/logos/openai_logo_icon_248315.png' },
+  'kimi-k2.5':                    { name: 'Kimi-K2.5',             color: '#45c4b0', width: 2, logo: 'static/images/logos/moonshotlogo.jpeg' },
+  'gemini-3-flash-preview':       { name: 'Gemini 3 Flash',        color: '#b197fc', width: 2, logo: 'static/images/logos/gemini-color.png' },
+  'gemini-3.1-flash-lite-preview':{ name: 'Gemini 3.1 Flash Lite', color: '#9775d4', width: 2, logo: 'static/images/logos/gemini-color.png' },
+  'gpt-5.4-mini':                 { name: 'GPT-5.4 Mini',          color: '#ffd43b', width: 2, logo: 'static/images/logos/openai_logo_icon_248315.png' },
+  'claude-sonnet-4-6':            { name: 'Claude Sonnet 4.6',     color: '#e599f7', width: 2, logo: 'static/images/logos/claude-color.png' },
+  'qwen3.5-397b':                 { name: 'Qwen 3.5-397B',         color: '#ffa94d', width: 2, logo: 'static/images/logos/Qwen_logo.svg.png' },
+  'gemini-3.1-pro-preview':       { name: 'Gemini 3.1 Pro',        color: '#00d4aa', width: 2, logo: 'static/images/logos/gemini-color.png' },
+  'gpt-5.4-nano':                 { name: 'GPT-5.4 Nano',          color: '#ff8c42', width: 2, logo: 'static/images/logos/openai_logo_icon_248315.png' },
+  'grok-4.20-beta':               { name: 'Grok 4.20 Beta',        color: '#69db7c', width: 2, logo: 'static/images/logos/grok.png' },
+  'greedy_bot':                   { name: 'Greedy Bot',             color: '#ff4b6e', width: 1.5, logo: null },
+};
+
+// Preload logo images
+const logoImages = {};
+Object.entries(MODEL_CONFIG).forEach(([key, cfg]) => {
+  if (cfg.logo) {
+    const img = new Image();
+    img.src = cfg.logo;
+    logoImages[cfg.name] = img;
+  }
+});
+
+// Plugin: draw $200K starting funds dashed line
+const startingFundsPlugin = {
+  id: 'startingFunds',
+  beforeDatasetsDraw(chart) {
+    const yScale = chart.scales.y;
+    const xScale = chart.scales.x;
+    const y = yScale.getPixelForValue(200000);
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.setLineDash([8, 6]);
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xScale.left, y);
+    ctx.lineTo(xScale.right, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#888';
+    ctx.font = '600 12px Inter';
+    ctx.fillText('Starting Funds ($200K)', xScale.left + 4, y - 8);
+    ctx.restore();
+  }
+};
+
+// Plugin: draw logos at last data point, connected to line
+const logoPlugin = {
+  id: 'endpointLogos',
+  afterDraw(chart) {
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((ds, i) => {
+      const meta = chart.getDatasetMeta(i);
+      if (meta.hidden) return;
+      const img = logoImages[ds.label];
+      if (!img || !img.complete) return;
+      const lastPt = meta.data[meta.data.length - 1];
+      if (!lastPt) return;
+      const radius = 13;
+      const border = 2.5;
+      const cx = lastPt.x;
+      const cy = lastPt.y;
+
+      ctx.save();
+      // Outer circle (colored border)
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + border, 0, Math.PI * 2);
+      ctx.fillStyle = ds.borderColor;
+      ctx.fill();
+
+      // White background circle
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Clip to circle and draw logo
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius - 1, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, cx - radius + 1, cy - radius + 1, (radius - 1) * 2, (radius - 1) * 2);
+      ctx.restore();
+    });
+  }
+};
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_KEYS = ['2025-01','2025-02','2025-03','2025-04','2025-05','2025-06','2025-07','2025-08','2025-09','2025-10','2025-11','2025-12'];
+
+// Sort order by final funds
+const SORT_ORDER = [
+  'claude-opus-4-6','glm-5','gpt-5.4','kimi-k2.5','gemini-3-flash-preview',
+  'gemini-3.1-flash-lite-preview','gpt-5.4-mini','claude-sonnet-4-6',
+  'qwen3.5-397b','gemini-3.1-pro-preview','gpt-5.4-nano','grok-4.20-beta','greedy_bot'
+];
+
+let fundsChart = null;
+
+fetch('static/data.json').then(r => r.json()).then(data => {
+  const datasets = SORT_ORDER.filter(k => data[k]).map(key => {
+    const cfg = MODEL_CONFIG[key];
+    const vals = MONTH_KEYS.map(m => data[key][m] !== undefined ? data[key][m] : 200000);
+    return {
+      label: cfg.name,
+      data: vals,
+      borderColor: cfg.color,
+      backgroundColor: cfg.color + '18',
+      borderWidth: cfg.width,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      tension: 0.3,
+      fill: false,
+    };
+  });
+
+  const ctx = document.getElementById('fundsChart').getContext('2d');
+  fundsChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: MONTHS, datasets },
+    plugins: [startingFundsPlugin, logoPlugin],
+    options: {
+      responsive: true,
+      animation: false,
+      layout: { padding: { right: 50 } },
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            padding: 20,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            font: { size: 12, family: 'Inter', weight: '500' },
+            sort: (a, b, chartData) => {
+              const aLast = chartData.datasets[a.datasetIndex].data.slice(-1)[0] || 0;
+              const bLast = chartData.datasets[b.datasetIndex].data.slice(-1)[0] || 0;
+              return bLast - aLast;
+            },
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          titleColor: '#1e293b',
+          bodyColor: '#475569',
+          borderColor: '#e2e8f0',
+          borderWidth: 1,
+          padding: 12,
+          titleFont: { size: 13, weight: '600', family: 'Inter' },
+          bodyFont: { size: 12, family: 'Inter' },
+          itemSort: (a, b) => b.parsed.y - a.parsed.y,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              const fmt = v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : `$${(v/1000).toFixed(0)}K`;
+              return ` ${ctx.dataset.label}: ${fmt}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 13, family: 'Inter' }, color: '#64748b' }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f1f5f9' },
+          ticks: {
+            font: { size: 13, family: 'Inter' },
+            color: '#64748b',
+            callback: v => v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : `$${(v/1000).toFixed(0)}K`
+          },
+          title: { display: true, text: 'Net Worth', font: { size: 15, weight: '600', family: 'Inter' }, color: '#1e293b' }
+        }
+      }
+    }
+  });
+});
+
+// Tab switching
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+  if (tab === 'chart' && fundsChart) fundsChart.resize();
+}
+
+// Sort table
+let currentSort = { col: 3, dir: 'desc' };
+function sortTable(col, type) {
+  const table = document.getElementById('leaderboardTable');
+  const tbody = table.querySelector('tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  if (currentSort.col === col) { currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc'; }
+  else { currentSort.col = col; currentSort.dir = type === 'num' ? 'desc' : 'asc'; }
+  rows.sort((a, b) => {
+    let aVal = a.cells[col].textContent.trim(), bVal = b.cells[col].textContent.trim();
+    if (type === 'num') {
+      aVal = parseFloat(aVal.replace(/[$,%MK\/]/g,''))||0;
+      bVal = parseFloat(bVal.replace(/[$,%MK\/]/g,''))||0;
+      if(a.cells[col].textContent.includes('M')) aVal*=1000;
+      if(b.cells[col].textContent.includes('M')) bVal*=1000;
+    }
+    let cmp = type === 'num' ? aVal - bVal : aVal.localeCompare(bVal);
+    return currentSort.dir === 'desc' ? -cmp : cmp;
+  });
+  rows.forEach(r => tbody.appendChild(r));
+  table.querySelectorAll('th').forEach((th,i) => {
+    th.classList.toggle('sorted', i===col);
+    const icon = th.querySelector('.sort-icon i');
+    icon.className = i===col ? (currentSort.dir==='desc' ? 'fas fa-sort-down' : 'fas fa-sort-up') : 'fas fa-sort';
+  });
+}
+
+// Easter egg
+let catClicks = 0;
+let catClickTimer = null;
+document.getElementById('catTrigger').addEventListener('click', () => {
+  catClicks++;
+  clearTimeout(catClickTimer);
+  catClickTimer = setTimeout(() => catClicks = 0, 2000);
+
+  // 5 consecutive clicks: show the cat pointing gif
+  if (catClicks >= 5) {
+    catClicks = 0;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:relative;';
+    const img = document.createElement('img');
+    img.src = 'static/images/cat-point.png';
+    img.style.cssText = 'max-width:700px;border-radius:16px;display:block;';
+    const text = document.createElement('div');
+    text.textContent = 'STOP!';
+    text.style.cssText = 'position:absolute;bottom:-10px;left:0;right:0;text-align:center;font-family:Impact,\"Arial Black\",sans-serif;font-size:3rem;font-weight:900;color:#fff;text-shadow:3px 3px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000;letter-spacing:3px;text-transform:uppercase;';
+    wrapper.appendChild(img);
+    wrapper.appendChild(text);
+    overlay.appendChild(wrapper);
+    overlay.addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+    return;
+  }
+  const cats = ['🐱','🐈','😺','😸','🐈‍⬛','😻','🙀','😹','😽','😿'];
+  // Random weather: mist (slow, few), shower (medium), downpour (fast, many)
+  const weather = ['mist','shower','downpour'][Math.floor(Math.random() * 3)];
+  const config = {
+    mist:     { count: 80,  delaySpread: 8000, speedMin: 2, speedMax: 7,  sizeMin: 12, sizeMax: 35 },
+    shower:   { count: 300, delaySpread: 5000, speedMin: 1, speedMax: 5,  sizeMin: 18, sizeMax: 45 },
+    downpour: { count: 800, delaySpread: 3000, speedMin: 0.6, speedMax: 3, sizeMin: 20, sizeMax: 55 },
+  }[weather];
+  console.log('Cat weather:', weather);
+  for (let i = 0; i < config.count; i++) {
+    const delay = Math.random() * config.delaySpread;
+    setTimeout(() => {
+      const cat = document.createElement('div');
+      cat.textContent = cats[Math.floor(Math.random() * cats.length)];
+      // Use pow to spread speeds: some very fast, some very slow, fewer in the middle
+      const r = Math.random();
+      const skew = r < 0.5 ? Math.pow(r * 2, 2) / 2 : 1 - Math.pow((1 - r) * 2, 2) / 2;
+      const duration = config.speedMin + skew * (config.speedMax - config.speedMin);
+      const size = config.sizeMin + Math.random() * (config.sizeMax - config.sizeMin);
+      cat.style.cssText = `
+        position: fixed; z-index: 9999; pointer-events: none;
+        font-size: ${size}px;
+        left: ${Math.random() * 100}vw;
+        top: -60px;
+        animation: catFall ${duration}s linear forwards;
+        opacity: ${weather === 'mist' ? 0.5 : 0.9};
+      `;
+      document.body.appendChild(cat);
+      setTimeout(() => cat.remove(), duration * 1000 + 500);
+    }, delay);
+  }
+});
+
+// Add cat animation keyframes
+if (!document.getElementById('catStyles')) {
+  const style = document.createElement('style');
+  style.id = 'catStyles';
+  style.textContent = `
+    @keyframes catFall {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(${360}deg); opacity: 0.3; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function copyBib() {
+  navigator.clipboard.writeText(document.getElementById('citationText').textContent).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    setTimeout(() => btn.innerHTML = '<i class="fas fa-copy"></i> Copy', 2000);
+  });
+}
+</script>
+
+</body>
+</html>
