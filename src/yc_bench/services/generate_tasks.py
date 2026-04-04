@@ -87,7 +87,9 @@ def _sample_domains_with_bias(rng, k, specialty_domains=None, specialty_bias=0.7
 
     # Remaining picks: uniform random
     if k > 1 and available:
-        remaining = sample_without_replacement(rng, available, min(k - 1, len(available)))
+        remaining = sample_without_replacement(
+            rng, available, min(k - 1, len(available))
+        )
         picked.extend(remaining)
 
     return picked
@@ -95,10 +97,16 @@ def _sample_domains_with_bias(rng, k, specialty_domains=None, specialty_bias=0.7
 
 def _sample_requirements(rng, cfg, prestige=1, specialty_domains=None):
     k = _sample_domain_count(rng, cfg)
-    picked_domains = _sample_domains_with_bias(rng, k, specialty_domains=specialty_domains,
-                                                specialty_bias=cfg.task_specialty_domain_bias)
+    picked_domains = _sample_domains_with_bias(
+        rng,
+        k,
+        specialty_domains=specialty_domains,
+        specialty_bias=cfg.task_specialty_domain_bias,
+    )
     scale = 1 + cfg.prestige_qty_scale * (prestige - 1)
-    return {domain: int(_sample_required_qty(rng, cfg) * scale) for domain in picked_domains}
+    return {
+        domain: int(_sample_required_qty(rng, cfg) * scale) for domain in picked_domains
+    }
 
 
 def _required_trust_from_reward(rng, cfg, reward_cents):
@@ -110,20 +118,30 @@ def _required_trust_from_reward(rng, cfg, reward_cents):
     work (prove yourself on small jobs before getting big ones).
     """
     # Normalize reward into 0-1 range using the distribution bounds
-    reward_floor = getattr(cfg.dist.reward_funds_cents, 'low', 300_000)
-    reward_ceiling = getattr(cfg.dist.reward_funds_cents, 'high', 4_000_000)
+    reward_floor = getattr(cfg.dist.reward_funds_cents, "low", 300_000)
+    reward_ceiling = getattr(cfg.dist.reward_funds_cents, "high", 4_000_000)
     if reward_cents <= reward_floor:
         return 0
 
-    reward_frac = min(1.0, (reward_cents - reward_floor) / (reward_ceiling - reward_floor))
+    reward_frac = min(
+        1.0, (reward_cents - reward_floor) / (reward_ceiling - reward_floor)
+    )
 
     # Only premium tasks (top portion) require trust.
-    trust_prob = max(0.0, (reward_frac - cfg.trust_reward_threshold) / cfg.trust_reward_ramp)
+    trust_prob = max(
+        0.0, (reward_frac - cfg.trust_reward_threshold) / cfg.trust_reward_ramp
+    )
     if rng.random() >= trust_prob:
         return 0
 
     # Trust level required: 1 at threshold, up to max for top tasks
-    return max(1, min(int(1 + reward_frac * cfg.trust_level_reward_scale), cfg.trust_level_max_required))
+    return max(
+        1,
+        min(
+            int(1 + reward_frac * cfg.trust_level_reward_scale),
+            cfg.trust_level_max_required,
+        ),
+    )
 
 
 def _make_task(rng, cfg, prestige, serial, requirements, client_index=0):
@@ -150,7 +168,9 @@ def _make_task(rng, cfg, prestige, serial, requirements, client_index=0):
     )
 
 
-def generate_tasks(*, run_seed, count, cfg, client_specialties=None, client_reward_mults=None):
+def generate_tasks(
+    *, run_seed, count, cfg, client_specialties=None, client_reward_mults=None
+):
     """Generate market tasks.
 
     Args:
@@ -169,17 +189,27 @@ def generate_tasks(*, run_seed, count, cfg, client_specialties=None, client_rewa
         rng = streams.stream(f"task_{idx}")
         prestige = _sample_required_prestige(rng, cfg, index=idx - 1)
         client_index = (idx - 1) % num_clients
-        spec_domains = client_specialties[client_index % len(client_specialties)] if client_specialties else None
-        requirements = _sample_requirements(rng, cfg, prestige=prestige, specialty_domains=spec_domains)
-        task = _make_task(rng, cfg, prestige, serial=idx, requirements=requirements,
-                          client_index=client_index)
+        spec_domains = (
+            client_specialties[client_index % len(client_specialties)]
+            if client_specialties
+            else None
+        )
+        requirements = _sample_requirements(
+            rng, cfg, prestige=prestige, specialty_domains=spec_domains
+        )
+        task = _make_task(
+            rng,
+            cfg,
+            prestige,
+            serial=idx,
+            requirements=requirements,
+            client_index=client_index,
+        )
         # Apply client reward multiplier — higher-mult clients offer better-paying tasks
         if client_reward_mults and client_index < len(client_reward_mults):
             mult = client_reward_mults[client_index]
             new_reward = int(task.reward_funds_cents * mult)
-            task = GeneratedTask(
-                **{**task.__dict__, "reward_funds_cents": new_reward}
-            )
+            task = GeneratedTask(**{**task.__dict__, "reward_funds_cents": new_reward})
         out.append(task)
     return out
 
@@ -190,39 +220,59 @@ def build_task_rows(*, run_seed, count, cfg):
     requirement_rows = []
 
     for task in generated:
-        task_rows.append({
-            "title": task.title,
-            "required_prestige": task.required_prestige,
-            "reward_funds_cents": task.reward_funds_cents,
-            "reward_prestige_delta": task.reward_prestige_delta,
-            "skill_boost_pct": task.skill_boost_pct,
-            "status": task.status,
-            "company_id": task.company_id,
-            "accepted_at": task.accepted_at,
-            "deadline": task.deadline,
-            "completed_at": task.completed_at,
-            "success": task.success,
-            "progress_milestone_pct": task.progress_milestone_pct,
-            "client_index": task.client_index,
-            "required_trust": task.required_trust,
-        })
+        task_rows.append(
+            {
+                "title": task.title,
+                "required_prestige": task.required_prestige,
+                "reward_funds_cents": task.reward_funds_cents,
+                "reward_prestige_delta": task.reward_prestige_delta,
+                "skill_boost_pct": task.skill_boost_pct,
+                "status": task.status,
+                "company_id": task.company_id,
+                "accepted_at": task.accepted_at,
+                "deadline": task.deadline,
+                "completed_at": task.completed_at,
+                "success": task.success,
+                "progress_milestone_pct": task.progress_milestone_pct,
+                "client_index": task.client_index,
+                "required_trust": task.required_trust,
+            }
+        )
         for domain, qty in task.requirements.items():
-            requirement_rows.append({
-                "_task_title": task.title,
-                "domain": domain,
-                "required_qty": qty,
-                "completed_qty": 0,
-            })
+            requirement_rows.append(
+                {
+                    "_task_title": task.title,
+                    "domain": domain,
+                    "required_qty": qty,
+                    "completed_qty": 0,
+                }
+            )
     return task_rows, requirement_rows
 
 
-def generate_replacement_task(*, run_seed, replenish_counter, replaced_prestige, replaced_client_index=0, cfg, specialty_domains=None):
+def generate_replacement_task(
+    *,
+    run_seed,
+    replenish_counter,
+    replaced_prestige,
+    replaced_client_index=0,
+    cfg,
+    specialty_domains=None,
+):
     """Generate a replacement task with the same prestige and client as the accepted task."""
     streams = RngStreams(run_seed)
     rng = streams.stream(f"replenish_{replenish_counter}")
-    requirements = _sample_requirements(rng, cfg, prestige=replaced_prestige, specialty_domains=specialty_domains)
-    return _make_task(rng, cfg, replaced_prestige, serial=replenish_counter, requirements=requirements,
-                      client_index=replaced_client_index)
+    requirements = _sample_requirements(
+        rng, cfg, prestige=replaced_prestige, specialty_domains=specialty_domains
+    )
+    return _make_task(
+        rng,
+        cfg,
+        replaced_prestige,
+        serial=replenish_counter,
+        requirements=requirements,
+        client_index=replaced_client_index,
+    )
 
 
 __all__ = [

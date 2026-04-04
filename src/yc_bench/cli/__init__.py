@@ -20,6 +20,7 @@ app = typer.Typer(name="yc-bench", add_completion=False)
 
 _engine_cache = {}
 
+
 @contextmanager
 def get_db():
     """Yield a transactional SQLAlchemy session, commit on success.
@@ -27,6 +28,7 @@ def get_db():
     Reuses the same engine across calls to avoid SQLite connection visibility issues.
     """
     from ..db.session import _get_database_url
+
     db_url = _get_database_url()
     if db_url not in _engine_cache:
         _engine_cache[db_url] = build_engine()
@@ -46,6 +48,7 @@ class _JSONEncoder(json.JSONEncoder):
         if isinstance(o, Decimal):
             return float(o)
         from datetime import datetime, date
+
         if isinstance(o, datetime):
             return o.isoformat()
         if isinstance(o, date):
@@ -68,12 +71,12 @@ def error_output(message: str, code: int = 1) -> None:
 # Register sub-command groups
 # ---------------------------------------------------------------------------
 
-from .sim_commands import sim_app        # noqa: E402
+from .sim_commands import sim_app  # noqa: E402
 from .company_commands import company_app  # noqa: E402
-from .market_commands import market_app    # noqa: E402
-from .task_commands import task_app        # noqa: E402
+from .market_commands import market_app  # noqa: E402
+from .task_commands import task_app  # noqa: E402
 from .finance_commands import finance_app  # noqa: E402
-from .report_commands import report_app    # noqa: E402
+from .report_commands import report_app  # noqa: E402
 from .employee_commands import employee_app  # noqa: E402
 from .scratchpad_commands import scratchpad_app  # noqa: E402
 from .client_commands import client_app  # noqa: E402
@@ -93,32 +96,47 @@ app.add_typer(client_app, name="client")
 def start_command_cli():
     """Interactive 3-step quickstart: pick model, enter key, choose difficulty, run."""
     from .start_command import start_interactive
+
     start_interactive()
 
 
 @app.command("run")
 def run_command_cli(
-    model: str = typer.Option(..., help="LiteLLM model string (e.g. openrouter/z-ai/glm-5)"),
-    seed: int = typer.Option(..., help="Random seed for deterministic world generation"),
-    horizon_years: Optional[int] = typer.Option(None, help="Simulation horizon in years (default from config)"),
+    model: str = typer.Option(
+        ..., help="LiteLLM model string (e.g. openrouter/z-ai/glm-5)"
+    ),
+    seed: int = typer.Option(
+        ..., help="Random seed for deterministic world generation"
+    ),
+    horizon_years: Optional[int] = typer.Option(
+        None, help="Simulation horizon in years (default from config)"
+    ),
     company_name: str = typer.Option("BenchCo", help="Name of the simulated company"),
-    start_date: str = typer.Option("2025-01-01", help="Simulation start date (YYYY-MM-DD)"),
+    start_date: str = typer.Option(
+        "2025-01-01", help="Simulation start date (YYYY-MM-DD)"
+    ),
     config_name: str = typer.Option(
-        "default", "--config",
+        "default",
+        "--config",
         help="Preset name ('default', 'fast_test', 'high_reward') or path to a .toml file",
     ),
-    no_live: bool = typer.Option(False, "--no-live", help="Disable the live terminal dashboard"),
+    no_live: bool = typer.Option(
+        False, "--no-live", help="Disable the live terminal dashboard"
+    ),
     max_episodes: int = typer.Option(
-        1, "--max-episodes",
+        1,
+        "--max-episodes",
         help="Max episodes (restarts after bankruptcy with scratchpad carried over). Default: 1",
     ),
 ):
     """Run a full benchmark: migrate DB, seed world, run agent loop to completion."""
     from dotenv import find_dotenv, load_dotenv
+
     load_dotenv(find_dotenv(usecwd=True), override=False)
 
     from ..runner.main import run_benchmark
     from ..runner.args import RunArgs
+
     args = RunArgs(
         model=model,
         seed=seed,

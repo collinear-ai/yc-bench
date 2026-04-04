@@ -12,9 +12,16 @@ _NUM_DOMAINS = len(_ALL_DOMAINS)
 # Fixed tier composition for a 10-person startup.
 # Repeated to cover any employee count via modular indexing.
 _TIER_SEQUENCE = [
-    "junior", "junior", "junior", "junior", "junior",
-    "mid", "mid", "mid",
-    "senior", "senior",
+    "junior",
+    "junior",
+    "junior",
+    "junior",
+    "junior",
+    "mid",
+    "mid",
+    "mid",
+    "senior",
+    "senior",
 ]
 
 
@@ -66,7 +73,9 @@ def generate_employees(*, run_seed, count, cfg):
         tier_name = tiers[idx - 1]
         tier_cfg = _tier_by_name(cfg, tier_name)
 
-        domain_rates = _sample_domain_rates(rng, min_rate=tier_cfg.rate_min, max_rate=tier_cfg.rate_max)
+        domain_rates = _sample_domain_rates(
+            rng, min_rate=tier_cfg.rate_min, max_rate=tier_cfg.rate_max
+        )
         rates = dict(zip(_ALL_DOMAINS, domain_rates))
 
         employees.append(

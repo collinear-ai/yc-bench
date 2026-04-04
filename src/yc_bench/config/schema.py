@@ -3,24 +3,32 @@
 Every tunable parameter lives here. TOML files are validated against these
 models — Pydantic catches typos and type errors at load time.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
-from .sampling import BetaDist, ConstantDist, NormalDist, TriangularDist, UniformDist, DistSpec  # noqa: F401
-
+from .sampling import (
+    BetaDist,
+    ConstantDist,
+    NormalDist,
+    TriangularDist,
+    UniformDist,
+    DistSpec,
+)  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Salary tier
 # ---------------------------------------------------------------------------
 
+
 class SalaryTierConfig(BaseModel):
     name: str
-    share: float          # fraction of employees in this tier (all tiers must sum to 1.0)
-    min_cents: int        # minimum monthly salary in cents
-    max_cents: int        # maximum monthly salary in cents
-    rate_min: float       # minimum skill rate (units/hour)
-    rate_max: float       # maximum skill rate (units/hour)
+    share: float  # fraction of employees in this tier (all tiers must sum to 1.0)
+    min_cents: int  # minimum monthly salary in cents
+    max_cents: int  # maximum monthly salary in cents
+    rate_min: float  # minimum skill rate (units/hour)
+    rate_max: float  # maximum skill rate (units/hour)
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +39,7 @@ class SalaryTierConfig(BaseModel):
 # changing parameters tunes the shape. See config/sampling.py for all families.
 # ---------------------------------------------------------------------------
 
+
 class WorldDists(BaseModel):
     # Prestige level required to accept a task (result cast to int).
     # Any DistSpec family works — e.g. constant for ablations, uniform for flat sampling.
@@ -39,7 +48,9 @@ class WorldDists(BaseModel):
     )
     # Base reward paid on task completion, in cents (result cast to int).
     reward_funds_cents: DistSpec = Field(
-        default_factory=lambda: TriangularDist(low=300_000, high=4_000_000, mode=1_400_000)
+        default_factory=lambda: TriangularDist(
+            low=300_000, high=4_000_000, mode=1_400_000
+        )
     )
     # Number of domains required per task (result cast to int).
     domain_count: DistSpec = Field(
@@ -52,7 +63,9 @@ class WorldDists(BaseModel):
     # Prestige delta awarded per domain on task success.
     # Mean ~0.1: climbing from prestige 1→5 takes ~40 tasks.
     reward_prestige_delta: DistSpec = Field(
-        default_factory=lambda: BetaDist(alpha=1.2, beta=2.8, scale=0.35, low=0.0, high=0.35)
+        default_factory=lambda: BetaDist(
+            alpha=1.2, beta=2.8, scale=0.35, low=0.0, high=0.35
+        )
     )
     # Trust level required to accept exclusive tasks (sampled for ~20% of tasks).
     required_trust: DistSpec = Field(
@@ -67,6 +80,7 @@ class WorldDists(BaseModel):
 # ---------------------------------------------------------------------------
 # Agent / LLM
 # ---------------------------------------------------------------------------
+
 
 class AgentConfig(BaseModel):
     model: str = "openrouter/z-ai/glm-5"
@@ -85,6 +99,7 @@ class AgentConfig(BaseModel):
 # Agent loop
 # ---------------------------------------------------------------------------
 
+
 class LoopConfig(BaseModel):
     # Consecutive turns without `sim resume` before the loop forces a time-advance.
     auto_advance_after_turns: int = 10
@@ -96,8 +111,9 @@ class LoopConfig(BaseModel):
 # Simulation
 # ---------------------------------------------------------------------------
 
+
 class SimConfig(BaseModel):
-    start_date: str = "2025-01-01"    # ISO 8601 (YYYY-MM-DD)
+    start_date: str = "2025-01-01"  # ISO 8601 (YYYY-MM-DD)
     horizon_years: int = 3
     company_name: str = "BenchCo"
 
@@ -105,6 +121,7 @@ class SimConfig(BaseModel):
 # ---------------------------------------------------------------------------
 # World generation
 # ---------------------------------------------------------------------------
+
 
 class WorldConfig(BaseModel):
     """All world-generation parameters.
@@ -132,7 +149,9 @@ class WorldConfig(BaseModel):
     prestige_max: float
     prestige_min: float
     penalty_fail_multiplier: float
-    penalty_fail_funds_pct: float = 0.0  # fraction of advertised reward deducted on failure
+    penalty_fail_funds_pct: float = (
+        0.0  # fraction of advertised reward deducted on failure
+    )
     penalty_cancel_multiplier: float
     reward_prestige_scale: float
     prestige_decay_per_day: float
@@ -229,9 +248,8 @@ class WorldConfig(BaseModel):
         # Using Premium reference (mult≈1.3): scale = (ceiling - 0.50) / (1.69 × trust_max)
         ref_mult_sq = 1.69  # 1.3²
         self.trust_reward_scale = (
-            (self.trust_reward_ceiling - self.trust_base_multiplier)
-            / (ref_mult_sq * self.trust_max)
-        )
+            self.trust_reward_ceiling - self.trust_base_multiplier
+        ) / (ref_mult_sq * self.trust_max)
 
         # trust_gating_fraction → threshold + ramp
         # At 0.2: threshold=0.6, ramp=0.4 (top 40% CAN require, effective ~20%)
@@ -249,7 +267,9 @@ class WorldConfig(BaseModel):
 
     @model_validator(mode="after")
     def _salary_shares_sum_to_one(self) -> WorldConfig:
-        total = self.salary_junior.share + self.salary_mid.share + self.salary_senior.share
+        total = (
+            self.salary_junior.share + self.salary_mid.share + self.salary_senior.share
+        )
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"salary tier shares must sum to 1.0, got {total:.6f}")
         return self
@@ -258,6 +278,7 @@ class WorldConfig(BaseModel):
 # ---------------------------------------------------------------------------
 # Top-level experiment
 # ---------------------------------------------------------------------------
+
 
 class ExperimentConfig(BaseModel):
     name: str = "default"

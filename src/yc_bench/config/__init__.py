@@ -1,7 +1,14 @@
 import os
 
 from .loader import load_config
-from .schema import ExperimentConfig, AgentConfig, LoopConfig, SimConfig, WorldConfig, SalaryTierConfig
+from .schema import (
+    ExperimentConfig,
+    AgentConfig,
+    LoopConfig,
+    SimConfig,
+    WorldConfig,
+    SalaryTierConfig,
+)
 
 
 def get_world_config() -> WorldConfig:

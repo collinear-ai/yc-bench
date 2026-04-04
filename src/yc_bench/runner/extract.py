@@ -1,4 +1,5 @@
 """Extract structured time-series data from the DB at end-of-run."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -46,7 +47,9 @@ def _extract_ledger(db, company_id: UUID) -> List[Dict[str, Any]]:
     return [
         {
             "time": e.occurred_at.isoformat(),
-            "category": e.category.value if hasattr(e.category, "value") else str(e.category),
+            "category": (
+                e.category.value if hasattr(e.category, "value") else str(e.category)
+            ),
             "amount_cents": int(e.amount_cents),
         }
         for e in entries
@@ -73,21 +76,25 @@ def _extract_funds(db, company_id: UUID) -> List[Dict[str, Any]]:
     points: List[Dict[str, Any]] = []
     if entries:
         # Add start point at the time of first ledger entry
-        points.append({
-            "time": entries[0].occurred_at.isoformat(),
-            "funds_cents": initial_funds,
-            "event": "start",
-        })
+        points.append(
+            {
+                "time": entries[0].occurred_at.isoformat(),
+                "funds_cents": initial_funds,
+                "event": "start",
+            }
+        )
 
     running = initial_funds
     for e in entries:
         running += int(e.amount_cents)
         category = e.category.value if hasattr(e.category, "value") else str(e.category)
-        points.append({
-            "time": e.occurred_at.isoformat(),
-            "funds_cents": running,
-            "event": category,
-        })
+        points.append(
+            {
+                "time": e.occurred_at.isoformat(),
+                "funds_cents": running,
+                "event": category,
+            }
+        )
 
     return points
 
@@ -104,9 +111,7 @@ def _extract_prestige(db, company_id: UUID) -> List[Dict[str, Any]]:
     wc = get_world_config()
 
     prestige_rows = (
-        db.query(CompanyPrestige)
-        .filter(CompanyPrestige.company_id == company_id)
-        .all()
+        db.query(CompanyPrestige).filter(CompanyPrestige.company_id == company_id).all()
     )
     if not prestige_rows:
         return []
@@ -146,11 +151,13 @@ def _extract_prestige(db, company_id: UUID) -> List[Dict[str, Any]]:
     if completed_tasks:
         first_time = completed_tasks[0].completed_at
         for domain in all_domains:
-            events.append({
-                "time": first_time.isoformat(),
-                "domain": domain,
-                "level": round(domain_levels[domain], 4),
-            })
+            events.append(
+                {
+                    "time": first_time.isoformat(),
+                    "domain": domain,
+                    "level": round(domain_levels[domain], 4),
+                }
+            )
         last_event_time = first_time
 
     for t in completed_tasks:
@@ -164,20 +171,26 @@ def _extract_prestige(db, company_id: UUID) -> List[Dict[str, Any]]:
         # Apply task delta
         domains = task_domain_map.get(str(t.id), [])
         delta = float(t.reward_prestige_delta) if t.reward_prestige_delta else 0.0
-        is_success = (t.status == TaskStatus.COMPLETED_SUCCESS)
+        is_success = t.status == TaskStatus.COMPLETED_SUCCESS
 
         for domain in domains:
             if is_success:
-                domain_levels[domain] = min(wc.prestige_max, domain_levels[domain] + delta)
+                domain_levels[domain] = min(
+                    wc.prestige_max, domain_levels[domain] + delta
+                )
             else:
                 penalty = wc.penalty_fail_multiplier * delta
-                domain_levels[domain] = max(wc.prestige_min, domain_levels[domain] - penalty)
+                domain_levels[domain] = max(
+                    wc.prestige_min, domain_levels[domain] - penalty
+                )
 
-            events.append({
-                "time": t.completed_at.isoformat(),
-                "domain": domain,
-                "level": round(domain_levels[domain], 4),
-            })
+            events.append(
+                {
+                    "time": t.completed_at.isoformat(),
+                    "domain": domain,
+                    "level": round(domain_levels[domain], 4),
+                }
+            )
 
         last_event_time = t.completed_at
 
@@ -238,12 +251,14 @@ def _extract_client_trust(db, company_id: UUID) -> List[Dict[str, Any]]:
     if tasks:
         first_time = tasks[0].completed_at
         for cid, name in client_names.items():
-            points.append({
-                "time": first_time.isoformat(),
-                "client_name": name,
-                "trust_level": 0.0,
-                "loyalty": client_loyalty.get(cid, 0.0),
-            })
+            points.append(
+                {
+                    "time": first_time.isoformat(),
+                    "client_name": name,
+                    "trust_level": 0.0,
+                    "loyalty": client_loyalty.get(cid, 0.0),
+                }
+            )
         last_event_time = first_time
 
     for t in tasks:
@@ -264,15 +279,19 @@ def _extract_client_trust(db, company_id: UUID) -> List[Dict[str, Any]]:
             gain = wc.trust_gain_base * ((1 - ratio) ** wc.trust_gain_diminishing_power)
             trust_levels[cid] = min(wc.trust_max, trust_levels[cid] + gain)
         else:
-            trust_levels[cid] = max(wc.trust_min, trust_levels[cid] - wc.trust_fail_penalty)
+            trust_levels[cid] = max(
+                wc.trust_min, trust_levels[cid] - wc.trust_fail_penalty
+            )
 
         # Record state for the affected client
-        points.append({
-            "time": t.completed_at.isoformat(),
-            "client_name": client_names[cid],
-            "trust_level": round(trust_levels[cid], 4),
-            "loyalty": client_loyalty.get(cid, 0.0),
-        })
+        points.append(
+            {
+                "time": t.completed_at.isoformat(),
+                "client_name": client_names[cid],
+                "trust_level": round(trust_levels[cid], 4),
+                "loyalty": client_loyalty.get(cid, 0.0),
+            }
+        )
         last_event_time = t.completed_at
 
     return points
@@ -308,22 +327,32 @@ def _extract_tasks(db, company_id: UUID) -> List[Dict[str, Any]]:
             if client_row:
                 client_name = client_row.name
 
-        result.append({
-            "task_id": str(t.id),
-            "title": t.title,
-            "client_name": client_name,
-            "required_prestige": int(t.required_prestige),
-            "required_trust": int(t.required_trust) if t.required_trust else 0,
-            "reward_funds_cents": int(t.reward_funds_cents),
-            "advertised_reward_cents": int(t.advertised_reward_cents) if t.advertised_reward_cents else int(t.reward_funds_cents),
-            "reward_prestige_delta": float(t.reward_prestige_delta) if t.reward_prestige_delta else 0.0,
-            "status": t.status.value if hasattr(t.status, "value") else str(t.status),
-            "accepted_at": t.accepted_at.isoformat() if t.accepted_at else None,
-            "deadline": t.deadline.isoformat() if t.deadline else None,
-            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
-            "domains": domains,
-            "success": t.success,
-        })
+        result.append(
+            {
+                "task_id": str(t.id),
+                "title": t.title,
+                "client_name": client_name,
+                "required_prestige": int(t.required_prestige),
+                "required_trust": int(t.required_trust) if t.required_trust else 0,
+                "reward_funds_cents": int(t.reward_funds_cents),
+                "advertised_reward_cents": (
+                    int(t.advertised_reward_cents)
+                    if t.advertised_reward_cents
+                    else int(t.reward_funds_cents)
+                ),
+                "reward_prestige_delta": (
+                    float(t.reward_prestige_delta) if t.reward_prestige_delta else 0.0
+                ),
+                "status": (
+                    t.status.value if hasattr(t.status, "value") else str(t.status)
+                ),
+                "accepted_at": t.accepted_at.isoformat() if t.accepted_at else None,
+                "deadline": t.deadline.isoformat() if t.deadline else None,
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+                "domains": domains,
+                "success": t.success,
+            }
+        )
 
     return result
 
@@ -335,19 +364,25 @@ def _extract_employees(db, company_id: UUID) -> List[Dict[str, Any]]:
     employees = db.query(Employee).filter(Employee.company_id == company_id).all()
     result = []
     for emp in employees:
-        skills = db.query(EmployeeSkillRate).filter(
-            EmployeeSkillRate.employee_id == emp.id
-        ).all()
+        skills = (
+            db.query(EmployeeSkillRate)
+            .filter(EmployeeSkillRate.employee_id == emp.id)
+            .all()
+        )
         skill_rates = {
-            (s.domain.value if hasattr(s.domain, "value") else str(s.domain)): round(float(s.rate_domain_per_hour), 4)
+            (s.domain.value if hasattr(s.domain, "value") else str(s.domain)): round(
+                float(s.rate_domain_per_hour), 4
+            )
             for s in skills
         }
-        result.append({
-            "name": emp.name,
-            "tier": emp.tier,
-            "salary_cents": int(emp.salary_cents),
-            "skill_rates": skill_rates,
-        })
+        result.append(
+            {
+                "name": emp.name,
+                "tier": emp.tier,
+                "salary_cents": int(emp.salary_cents),
+                "skill_rates": skill_rates,
+            }
+        )
     return result
 
 
@@ -368,21 +403,27 @@ def _extract_assignments(db, company_id: UUID) -> List[Dict[str, Any]]:
 
     result = []
     for t in tasks:
-        assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id == t.id).all()
+        assignments = (
+            db.query(TaskAssignment).filter(TaskAssignment.task_id == t.id).all()
+        )
         emp_names = []
         for a in assignments:
             emp = db.query(Employee).filter(Employee.id == a.employee_id).one_or_none()
             if emp:
                 emp_names.append(emp.name)
-        result.append({
-            "task_title": t.title,
-            "status": t.status.value if hasattr(t.status, "value") else str(t.status),
-            "employees_assigned": emp_names,
-            "num_assigned": len(emp_names),
-            "accepted_at": t.accepted_at.isoformat() if t.accepted_at else None,
-            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
-            "success": t.success,
-        })
+        result.append(
+            {
+                "task_title": t.title,
+                "status": (
+                    t.status.value if hasattr(t.status, "value") else str(t.status)
+                ),
+                "employees_assigned": emp_names,
+                "num_assigned": len(emp_names),
+                "accepted_at": t.accepted_at.isoformat() if t.accepted_at else None,
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+                "success": t.success,
+            }
+        )
     return result
 
 
@@ -399,14 +440,16 @@ def _extract_clients(db, company_id: UUID) -> List[Dict[str, Any]]:
 
     result = []
     for ct, client in trust_rows:
-        result.append({
-            "name": client.name,
-            "loyalty": round(float(client.loyalty), 4),
-            "is_rat": client.loyalty < -0.3,
-            "tier": client.tier,
-            "specialty_domains": client.specialty_domains or [],
-            "final_trust": round(float(ct.trust_level), 4),
-        })
+        result.append(
+            {
+                "name": client.name,
+                "loyalty": round(float(client.loyalty), 4),
+                "is_rat": client.loyalty < -0.3,
+                "tier": client.tier,
+                "specialty_domains": client.specialty_domains or [],
+                "final_trust": round(float(ct.trust_level), 4),
+            }
+        )
     return result
 
 

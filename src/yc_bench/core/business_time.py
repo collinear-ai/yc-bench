@@ -8,21 +8,26 @@ WORKDAY_START = time(9, 0)
 WORKDAY_END = time(18, 0)
 WORK_HOURS_PER_DAY = Decimal("9")
 
+
 @dataclass(frozen=True)
 class BusinessCalendar:
     workday_start: time = WORKDAY_START
     workday_end: time = WORKDAY_END
-    
+
+
 DEFAULT_CALENDAR = BusinessCalendar()
+
 
 def is_weekday(ts):
     return ts.weekday() < 5
+
 
 def is_business_time(ts, cal=DEFAULT_CALENDAR):
     if not is_weekday(ts):
         return False
     t = ts.timetz().replace(tzinfo=None) if ts.tzinfo else ts.time()
     return cal.workday_start <= t < cal.workday_end
+
 
 def _day_start(ts, cal):
     return ts.replace(
@@ -32,6 +37,7 @@ def _day_start(ts, cal):
         microsecond=0,
     )
 
+
 def _day_end(ts, cal):
     return ts.replace(
         hour=cal.workday_end.hour,
@@ -40,6 +46,7 @@ def _day_end(ts, cal):
         microsecond=0,
     )
 
+
 def _next_weekday_start(ts, cal):
     cur = _day_start(ts, cal)
     while not is_weekday(cur):
@@ -47,12 +54,13 @@ def _next_weekday_start(ts, cal):
         cur = _day_start(cur, cal)
     return cur
 
+
 def next_business_time(ts, cal):
     if is_business_time(ts, cal):
         return ts
     if not is_weekday(ts):
         return _next_weekday_start(ts, cal)
-    
+
     day_start = _day_start(ts, cal)
     day_end = _day_end(ts, cal)
 
@@ -63,6 +71,7 @@ def next_business_time(ts, cal):
         return _next_weekday_start(ts + timedelta(days=1), cal)
 
     raise ValueError(f"No valid business time found after {ts}")
+
 
 def add_business_hours(ts, hours, cal=DEFAULT_CALENDAR):
     hours = Decimal(str(hours))
@@ -86,12 +95,13 @@ def add_business_hours(ts, hours, cal=DEFAULT_CALENDAR):
 
     return cur
 
+
 def _business_interval_same_day(start, end, cal):
     if end <= start:
         return Decimal("0")
     if not is_weekday(start):
         return Decimal("0")
-    
+
     day_start = _day_start(start, cal)
     day_end = _day_end(end, cal)
 
@@ -102,35 +112,60 @@ def _business_interval_same_day(start, end, cal):
         return Decimal("0")
     return Decimal(str((hi - lo).total_seconds())) / Decimal("3600")
 
+
 def business_hours_between(t0, t1, cal=DEFAULT_CALENDAR):
     if t1 <= t0:
         return Decimal("0")
-    
+
     cur = t0
     total = Decimal("0")
     while cur < t1:
-        next_midnight = (cur + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        next_midnight = (cur + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         seg_end = min(next_midnight, t1)
         total += _business_interval_same_day(cur, seg_end, cal)
         cur = seg_end
-    
+
     return total
 
+
 def business_seconds_between(t0, t1, cal=DEFAULT_CALENDAR):
-    return int((business_hours_between(t0, t1, cal) * Decimal("3600")).to_integral_value())
+    return int(
+        (business_hours_between(t0, t1, cal) * Decimal("3600")).to_integral_value()
+    )
+
 
 def first_business_of_month(dt, cal=DEFAULT_CALENDAR):
-    first = dt.replace(day=1, hour=cal.workday_start.hour, minute=cal.workday_start.minute, second=0, microsecond=0)
+    first = dt.replace(
+        day=1,
+        hour=cal.workday_start.hour,
+        minute=cal.workday_start.minute,
+        second=0,
+        microsecond=0,
+    )
     while not is_weekday(first):
         first += timedelta(days=1)
-        first = first.replace(hour=cal.workday_start.hour, minute=cal.workday_start.minute, second=0, microsecond=0)
+        first = first.replace(
+            hour=cal.workday_start.hour,
+            minute=cal.workday_start.minute,
+            second=0,
+            microsecond=0,
+        )
     return first
+
 
 def iter_monthly_payroll_boundaries(start, end, cal=DEFAULT_CALENDAR):
     if end <= start:
         return []
 
-    cursor = start.replace(day=1, hour=cal.workday_start.hour, minute=cal.workday_start.minute, second=0, microsecond=0)
+    cursor = start.replace(
+        day=1,
+        hour=cal.workday_start.hour,
+        minute=cal.workday_start.minute,
+        second=0,
+        microsecond=0,
+    )
     out = []
 
     while cursor < end:
@@ -145,6 +180,7 @@ def iter_monthly_payroll_boundaries(start, end, cal=DEFAULT_CALENDAR):
 
     return out
 
+
 __all__ = [
     "BusinessCalendar",
     "DEFAULT_CALENDAR",
@@ -156,4 +192,4 @@ __all__ = [
     "business_seconds_between",
     "first_business_of_month",
     "iter_monthly_payroll_boundaries",
-]  
+]

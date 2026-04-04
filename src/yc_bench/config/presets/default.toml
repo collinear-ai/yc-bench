@@ -1,12 +1,24 @@
-# YC-Bench default preset — hardened 3-year benchmark
+# YC-Bench default preset — 1-year benchmark (Table 2 in paper)
 #
 # This is the canonical benchmark configuration. Every parameter is listed
 # explicitly so this file serves as complete documentation of what is tunable.
-# Copy this file and override only what you need.
+#
+# Primary differentiator: PAYROLL GROWTH from employee assignment.
+# Assign-all (8 emp) grows payroll ~2.7× faster than selective (3 emp).
+# Over 12 months this creates a $100K+ gap in profitability.
+#
+# Secondary differentiator: RAT CLIENTS (~35% of clients).
+# RAT tasks have scope creep that causes deadline failures.
+# RATs offer top-tier rewards to attract the greedy bot.
+# Smart agents can detect RATs via `client history` after initial failures.
+#
+# Tertiary differentiator: TRUST BUILDING.
+# Focusing on fewer clients builds trust → work reduction → faster tasks.
+# Spreading across many clients erodes trust via cross-client decay.
 
 # experiment identity (top-level fields)
 name        = "default"
-description = "Hardened 3-year benchmark. Most tasks require prestige 3-5, 2-domain work, tight deadlines, costly cancellations."
+description = "1-year benchmark. Tests employee efficiency, client trust, and adversarial client detection."
 
 # ---------------------------------------------------------------------------
 # LLM agent
@@ -33,7 +45,7 @@ history_keep_rounds      = 20
 
 [loop]
 # Consecutive turns without `sim resume` before the loop forces a time-advance.
-auto_advance_after_turns = 10
+auto_advance_after_turns = 5
 
 # Hard cap on total turns. Comment out or set to a large number for unlimited.
 # max_turns = 500
@@ -44,7 +56,7 @@ auto_advance_after_turns = 10
 
 [sim]
 start_date    = "2025-01-01"    # ISO 8601
-horizon_years = 3
+horizon_years = 1
 company_name  = "BenchCo"
 
 # ---------------------------------------------------------------------------
@@ -52,8 +64,8 @@ company_name  = "BenchCo"
 # ---------------------------------------------------------------------------
 
 [world]
-num_employees            = 10
-initial_funds_cents      = 15_000_000    # $150,000
+num_employees            = 8
+initial_funds_cents      = 20_000_000    # $200,000
 initial_prestige_level   = 1.0
 work_hours_per_day       = 9.0
 
@@ -62,7 +74,7 @@ market_browse_default_limit  = 50
 
 # Salary bump per completed task — each assigned employee gets this raise.
 # Compounds over time, accelerating payroll pressure.
-salary_bump_pct = 0.01
+salary_bump_pct  = 0.01
 salary_max_cents = 10_000_000   # cap individual salary at $100K/month
 skill_rate_max   = 10.0         # cap employee skill rate
 
@@ -70,57 +82,41 @@ skill_rate_max   = 10.0         # cap employee skill rate
 prestige_max  = 10.0
 prestige_min  = 1.0
 
-# Cancelling (2x) is worse than failing (1.4x) at the margin — accepting
-# is a real commitment, not a free option.
-penalty_fail_multiplier    = 1.4    # hardened: was 0.8
-penalty_cancel_multiplier  = 2.0    # hardened: was 1.2
+penalty_fail_multiplier    = 1.0
+penalty_fail_funds_pct     = 0.35    # failing costs 35% of advertised reward
+penalty_cancel_multiplier  = 1.5
 
 # Extra reward fraction per prestige level above 1.
-# At 0.55: a prestige-8 task pays ~4.85x more than a prestige-1 task.
-reward_prestige_scale = 0.55    # hardened: was 0.3
+reward_prestige_scale = 0.30
+
+# No passive prestige decay
+prestige_decay_per_day = 0.0
 
 # --- Client trust ---
-# trust_build_rate:       ~tasks to reach 80% max trust (higher = slower)
-# trust_fragility:        0-1, how punishing failures/inactivity are
-# trust_focus_pressure:   0-1, penalty for spreading work across clients
-# trust_reward_ceiling:   payout multiplier a Premium client gives at max trust
-# trust_work_reduction_max: max work reduction at max trust
-# trust_gating_fraction:  fraction of tasks that require established trust
-num_clients              = 8
+num_clients              = 6
 trust_max                = 5.0
-trust_build_rate         = 20.0
-trust_fragility          = 0.5
-trust_focus_pressure     = 0.5
+trust_build_rate         = 5.0     # ~5 tasks to reach significant trust
+trust_fragility          = 0.3
+trust_focus_pressure     = 0.3     # cross-client decay
 trust_reward_ceiling     = 2.6
-trust_work_reduction_max = 0.40
-trust_gating_fraction    = 0.20
+trust_work_reduction_max = 0.50    # 50% less work at max trust
+trust_gating_fraction    = 0.30    # 30% of tasks require trust
+trust_gated_reward_boost = 0.0     # no reward distortion
 
 # --- Client loyalty (adversarial clients) ---
-# loyalty_rat_fraction:   target fraction of clients that are adversarial RATs (~15%)
-# loyalty_severity:       0-1, how punishing RATs are (scope creep, dispute clawback)
-# loyalty_reveal_trust:   trust level where loyalty effects begin manifesting
-loyalty_rat_fraction     = 0.15
-loyalty_severity         = 0.5
-loyalty_reveal_trust     = 2.0
-
-# Daily prestige decay per domain. Domains not exercised lose prestige
-# over time: -0.005/day → -0.15/month. Untouched domain drops ~1 level
-# every ~6 months. Prevents single-domain hyper-specialization.
-prestige_decay_per_day = 0.005
+loyalty_rat_fraction     = 0.35    # 35% adversarial clients
+loyalty_severity         = 1.0
+loyalty_reveal_trust     = 0.0
 
 # Required qty scaling by prestige: qty *= 1 + scale * (prestige - 1).
-# At 0.3: prestige-5 tasks need 2.2x the work of prestige-1 tasks.
-# High prestige pays more but demands proportionally more capacity.
 prestige_qty_scale = 0.3
 
 # --- Deadline ---
-# Deadline = max(deadline_min_biz_days, max_domain_qty / deadline_qty_per_day).
-# Domains are worked in parallel, so deadline scales with heaviest domain, not sum.
-deadline_qty_per_day   = 200.0
+deadline_qty_per_day   = 150.0
 deadline_min_biz_days  = 7
 
-# --- Progress milestones (checkpoint events at these completion fractions) ---
-task_progress_milestones = [0.25, 0.5, 0.75]
+# --- Progress milestones ---
+task_progress_milestones = []
 
 # --- Business hours ---
 workday_start_hour = 9
@@ -128,49 +124,30 @@ workday_end_hour   = 18
 
 # ---------------------------------------------------------------------------
 # World distributions
-#
-# Each [world.dist.<name>] section specifies the distribution used for one
-# random quantity. Change `type` to switch families; tune the parameters to
-# reshape the distribution.
-#
-# Available types: triangular, beta, normal, uniform, constant
 # ---------------------------------------------------------------------------
 
-# Prestige level required to accept a task (cast to int after sampling).
-# mode=4 means most tasks need prestige 3-5 — the early market is thin,
-# forcing agents to choose which domains to specialise in.
 [world.dist.required_prestige]
 type = "triangular"
 low  = 1
-high = 10
-mode = 4            # hardened: base default is mode=1
+high = 5
+mode = 1
 
-# Base reward paid on task completion, in cents (scaled further by prestige).
-# Mode $7K: prestige-1 tasks burn cash, prestige-4+ profits.
 [world.dist.reward_funds_cents]
 type = "triangular"
-low  = 150_000      # $1,500
-high = 2_000_000    # $20,000
-mode = 700_000      # $7,000
+low  = 200_000      # $2,000
+high = 1_200_000    # $12,000
+mode = 500_000      # $5,000
 
-# Number of domains each task requires work in (cast to int after sampling).
-# mode=2: most tasks need 2 domains — single-specialist dominance gone.
 [world.dist.domain_count]
-type = "triangular"
-low  = 1
-high = 3
-mode = 2            # hardened: base default is mode=1
+type  = "constant"
+value = 1
 
-# Work units required per domain per task (cast to int after sampling).
-# No trivially-small tasks: every task requires sustained employee-hours.
 [world.dist.required_qty]
 type = "triangular"
-low  = 800          # hardened: base default is 200
-high = 4000
-mode = 2000         # hardened: base default is 800
+low  = 400
+high = 1500
+mode = 800
 
-# Prestige delta awarded per domain on task success.
-# Mean ~0.1: climbing prestige 1→5 takes ~40 tasks.
 [world.dist.reward_prestige_delta]
 type  = "beta"
 alpha = 1.2
@@ -179,8 +156,6 @@ scale = 0.35
 low   = 0.0
 high  = 0.35
 
-# Skill rate boost applied to each assigned employee on task success.
-# Expressed as a fraction of current rate: 0.12 → average 12% boost.
 [world.dist.skill_boost]
 type  = "normal"
 mean  = 0.12

@@ -1,4 +1,5 @@
 """System prompt and user-message builders for the YC-Bench agent."""
+
 from __future__ import annotations
 
 SYSTEM_PROMPT = """\
@@ -72,7 +73,9 @@ def build_turn_context(
         if monthly_payroll_cents > 0
         else None
     )
-    runway_str = f"~{runway_months} months" if runway_months is not None else "∞ (no payroll)"
+    runway_str = (
+        f"~{runway_months} months" if runway_months is not None else "∞ (no payroll)"
+    )
 
     history_limit = 20
     turns_until_truncation = max(0, history_limit - turn_number)
@@ -113,18 +116,30 @@ def build_turn_context(
                 margin_str = f" [{margin}]" if margin else ""
                 n_emp = ev.get("employees_assigned", 0)
                 bump = ev.get("salary_bump_total_cents", 0)
-                bump_str = f" | {n_emp} employees, +${bump/100:,.0f}/mo payroll" if bump > 0 else f" | {n_emp} employees" if n_emp else ""
+                bump_str = (
+                    f" | {n_emp} employees, +${bump/100:,.0f}/mo payroll"
+                    if bump > 0
+                    else f" | {n_emp} employees" if n_emp else ""
+                )
                 if success:
-                    parts.append(f"- {title}{client_str}: SUCCESS{funds_str}{margin_str}{bump_str}")
+                    parts.append(
+                        f"- {title}{client_str}: SUCCESS{funds_str}{margin_str}{bump_str}"
+                    )
                 else:
-                    parts.append(f"- {title}{client_str}: FAILED — missed deadline{margin_str}, no reward")
+                    parts.append(
+                        f"- {title}{client_str}: FAILED — missed deadline{margin_str}, no reward"
+                    )
             elif ev_type == "task_half":
                 pct = ev.get("milestone_pct", "?")
-                parts.append(f"- Task {ev.get('task_id', '?')}: {pct}% progress reached")
+                parts.append(
+                    f"- Task {ev.get('task_id', '?')}: {pct}% progress reached"
+                )
             elif ev_type == "payment_dispute":
                 clawback = ev.get("clawback_cents", 0)
                 client_name = ev.get("client_name", "unknown")
-                parts.append(f"- PAYMENT DISPUTE from {client_name}: -${clawback / 100:,.2f} clawed back")
+                parts.append(
+                    f"- PAYMENT DISPUTE from {client_name}: -${clawback / 100:,.2f} clawed back"
+                )
             elif ev_type == "horizon_end":
                 parts.append("- **Horizon end reached. Simulation complete.**")
             elif ev_type == "bankruptcy":
@@ -145,7 +160,9 @@ def build_turn_context(
             "Assign employees and dispatch now."
         )
     else:
-        parts.append("\nDecide your next actions. Use `run_command` to execute CLI commands.")
+        parts.append(
+            "\nDecide your next actions. Use `run_command` to execute CLI commands."
+        )
 
     # Scratchpad is injected in the system prompt, not here (avoids duplication
     # across the 20-turn history window).
@@ -181,38 +198,42 @@ def build_initial_user_prompt(
 
     lines = []
     if episode > 1:
-        lines.extend([
-            f"## Episode {episode} — Restarting After Bankruptcy",
+        lines.extend(
+            [
+                f"## Episode {episode} — Restarting After Bankruptcy",
+                "",
+                f"You went bankrupt in episode {episode - 1}. The simulation has been reset,",
+                "but your **scratchpad notes from the previous episode are preserved**.",
+                "Check your scratchpad notes for strategy from the previous episode.",
+                "and learn from past mistakes before taking action.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Simulation Start — Take Immediate Action",
+            f"- current_time: {sim_time}",
+            f"- horizon_end: {horizon_end}",
+            f"- funds: ${funds_cents / 100:,.2f}",
+            f"- monthly_payroll: ${monthly_payroll_cents / 100:,.2f}",
+            f"- runway: {runway_str}",
+            f"- employees: {employee_count}",
+            f"- active_tasks: {active_tasks}",
+            f"- planned_tasks: {planned_tasks}",
             "",
-            f"You went bankrupt in episode {episode - 1}. The simulation has been reset,",
-            "but your **scratchpad notes from the previous episode are preserved**.",
-            "Check your scratchpad notes for strategy from the previous episode.",
-            "and learn from past mistakes before taking action.",
+            "**Your immediate priority**: generate revenue before payroll drains your runway.",
+            "Complete these steps now (multiple commands per turn are fine):",
+            "1. `yc-bench market browse` — see available tasks",
+            "2. `yc-bench task accept --task-id Task-42` — accept a task",
+            "3. `yc-bench task assign-all --task-id Task-42` — assign employees (or use `task assign` to pick individuals)",
+            "4. `yc-bench task dispatch --task-id Task-42` — start work",
+            "5. `yc-bench sim resume` — advance time",
             "",
-        ])
-    lines.extend([
-        "## Simulation Start — Take Immediate Action",
-        f"- current_time: {sim_time}",
-        f"- horizon_end: {horizon_end}",
-        f"- funds: ${funds_cents / 100:,.2f}",
-        f"- monthly_payroll: ${monthly_payroll_cents / 100:,.2f}",
-        f"- runway: {runway_str}",
-        f"- employees: {employee_count}",
-        f"- active_tasks: {active_tasks}",
-        f"- planned_tasks: {planned_tasks}",
-        "",
-        "**Your immediate priority**: generate revenue before payroll drains your runway.",
-        "Complete these steps now (multiple commands per turn are fine):",
-        "1. `yc-bench market browse` — see available tasks",
-        "2. `yc-bench task accept --task-id Task-42` — accept a task",
-        "3. `yc-bench task assign-all --task-id Task-42` — assign employees (or use `task assign` to pick individuals)",
-        "4. `yc-bench task dispatch --task-id Task-42` — start work",
-        "5. `yc-bench sim resume` — advance time",
-        "",
-        "**IMPORTANT**: Check each command's result before proceeding to the next.",
-        "If `task accept` fails (trust or prestige too low), try a different task.",
-        "Do NOT call `sim resume` unless you have at least one active task — it will skip forward with zero revenue.",
-    ])
+            "**IMPORTANT**: Check each command's result before proceeding to the next.",
+            "If `task accept` fails (trust or prestige too low), try a different task.",
+            "Do NOT call `sim resume` unless you have at least one active task — it will skip forward with zero revenue.",
+        ]
+    )
     if bankrupt:
         lines.append("WARNING: company is already bankrupt at initialization.")
     return "\n".join(lines)

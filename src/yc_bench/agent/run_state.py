@@ -1,4 +1,5 @@
 """Run state: tracks the progress and terminal status of a benchmark run."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -51,20 +52,29 @@ class RunState:
     def start(self) -> None:
         self.started_at = datetime.now(timezone.utc).isoformat()
 
-    def record_turn(self, user_input: str, agent_output: str, commands_executed: List[str] | None = None,
-                    turn_cost_usd: float = 0.0, prompt_tokens: int = 0, completion_tokens: int = 0) -> None:
+    def record_turn(
+        self,
+        user_input: str,
+        agent_output: str,
+        commands_executed: List[str] | None = None,
+        turn_cost_usd: float = 0.0,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+    ) -> None:
         self.turn_count += 1
         self.total_cost_usd += turn_cost_usd
-        self.transcript.append(TranscriptEntry(
-            turn=self.turn_count,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            user_input=user_input,
-            agent_output=agent_output,
-            commands_executed=commands_executed or [],
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cost_usd=turn_cost_usd,
-        ))
+        self.transcript.append(
+            TranscriptEntry(
+                turn=self.turn_count,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                user_input=user_input,
+                agent_output=agent_output,
+                commands_executed=commands_executed or [],
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cost_usd=turn_cost_usd,
+            )
+        )
 
     def mark_terminal(self, reason: TerminalReason, detail: str = "") -> None:
         self.terminal = True
@@ -82,7 +92,9 @@ class RunState:
         episode_data = {
             "episode": self.current_episode,
             "turns_completed": self.turn_count,
-            "terminal_reason": self.terminal_reason.value if self.terminal_reason else None,
+            "terminal_reason": (
+                self.terminal_reason.value if self.terminal_reason else None
+            ),
             "terminal_detail": self.terminal_detail,
             "cost_usd": round(self.total_cost_usd, 6),
             "started_at": self.started_at,
@@ -126,7 +138,9 @@ class RunState:
             "horizon_years": self.horizon_years,
             "total_episodes": self.current_episode,
             "terminal": self.terminal,
-            "terminal_reason": self.terminal_reason.value if self.terminal_reason else None,
+            "terminal_reason": (
+                self.terminal_reason.value if self.terminal_reason else None
+            ),
             "terminal_detail": self.terminal_detail,
             "started_at": self.started_at,
             "ended_at": self.ended_at,

@@ -1,4 +1,5 @@
 """Benchmark entrypoint: provisions DB, seeds world, runs agent loop to completion."""
+
 from __future__ import annotations
 
 import json
@@ -69,18 +70,24 @@ def _init_simulation(db_factory, args, experiment_cfg, horizon_years):
     with db_factory() as db:
         existing = db.query(SimState).first()
         if existing is not None:
-            company = db.query(Company).filter(Company.id == existing.company_id).first()
+            company = (
+                db.query(Company).filter(Company.id == existing.company_id).first()
+            )
             bankrupt = company is not None and company.funds_cents < 0
             horizon_reached = existing.sim_time >= existing.horizon_end
             if bankrupt or horizon_reached:
                 logger.info(
                     "Existing simulation is terminal (bankrupt=%s horizon_reached=%s) — reseeding.",
-                    bankrupt, horizon_reached,
+                    bankrupt,
+                    horizon_reached,
                 )
                 _wipe_simulation(db)
             else:
-                logger.info("Resuming non-terminal simulation (company_id=%s, sim_time=%s).",
-                            existing.company_id, existing.sim_time)
+                logger.info(
+                    "Resuming non-terminal simulation (company_id=%s, sim_time=%s).",
+                    existing.company_id,
+                    existing.sim_time,
+                )
                 return existing.company_id
 
         start_dt = _parse_date(args.start_date)
@@ -98,7 +105,10 @@ def _init_simulation(db_factory, args, experiment_cfg, horizon_years):
         )
         logger.info(
             "Initializing simulation: seed=%d employees=%d tasks=%d horizon=%dy",
-            args.seed, world.num_employees, world.num_market_tasks, horizon_years,
+            args.seed,
+            world.num_employees,
+            world.num_market_tasks,
+            horizon_years,
         )
         result = seed_world_transactional(db, req)
 
@@ -110,13 +120,15 @@ def _init_simulation(db_factory, args, experiment_cfg, horizon_years):
             payload={"reason": "horizon_end"},
             dedupe_key="horizon_end",
         )
-        db.add(SimState(
-            company_id=result.company_id,
-            sim_time=start_dt,
-            run_seed=args.seed,
-            horizon_end=horizon_end,
-            replenish_counter=0,
-        ))
+        db.add(
+            SimState(
+                company_id=result.company_id,
+                sim_time=start_dt,
+                run_seed=args.seed,
+                horizon_end=horizon_end,
+                replenish_counter=0,
+            )
+        )
         db.flush()
 
         logger.info("Simulation initialized: company_id=%s", result.company_id)
@@ -127,6 +139,7 @@ def _init_simulation(db_factory, args, experiment_cfg, horizon_years):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def _redirect_all_logging_to_file(log_file: Path) -> None:
     """Redirect ALL logging from the console to a file.
 
@@ -136,10 +149,12 @@ def _redirect_all_logging_to_file(log_file: Path) -> None:
     """
     log_file.parent.mkdir(exist_ok=True)
     file_handler = logging.FileHandler(str(log_file), mode="a")
-    file_handler.setFormatter(logging.Formatter(
-        "[%(asctime)s] %(name)s %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
+    file_handler.setFormatter(
+        logging.Formatter(
+            "[%(asctime)s] %(name)s %(levelname)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
 
     # Replace all console handlers on root logger with the file handler
     root = logging.getLogger()
@@ -168,6 +183,7 @@ def _build_db_url(args, episode: int, max_episodes: int) -> str:
 def _read_scratchpad(db_factory, company_id) -> str:
     """Read scratchpad content from the current DB."""
     from ..db.models.scratchpad import Scratchpad
+
     with db_factory() as db:
         row = db.query(Scratchpad).filter(Scratchpad.company_id == company_id).first()
         return row.content if row else ""
@@ -176,6 +192,7 @@ def _read_scratchpad(db_factory, company_id) -> str:
 def _write_scratchpad(db_factory, company_id, content: str) -> None:
     """Write scratchpad content into the current DB (upsert)."""
     from ..db.models.scratchpad import Scratchpad
+
     with db_factory() as db:
         row = db.query(Scratchpad).filter(Scratchpad.company_id == company_id).first()
         if row is None:
@@ -195,6 +212,7 @@ def run_benchmark(args):
 
     # Load experiment config — preset name or path to a .toml file
     from yc_bench.config import load_config
+
     experiment_cfg = load_config(args.config_name)
     # Propagate config name to CLI subprocess calls (e.g. task accept → generate_replacement_task)
     os.environ["YC_BENCH_EXPERIMENT"] = args.config_name
@@ -203,7 +221,11 @@ def run_benchmark(args):
         update={"agent": experiment_cfg.agent.model_copy(update={"model": args.model})}
     )
     # --horizon-years CLI flag overrides config; fall back to sim.horizon_years from config
-    horizon_years = args.horizon_years if args.horizon_years is not None else experiment_cfg.sim.horizon_years
+    horizon_years = (
+        args.horizon_years
+        if args.horizon_years is not None
+        else experiment_cfg.sim.horizon_years
+    )
 
     # Decide whether to use the live dashboard
     use_live = sys.stdout.isatty() and not getattr(args, "no_live", False)
@@ -216,7 +238,11 @@ def run_benchmark(args):
 
     logger.info(
         "YC-Bench starting: experiment=%s model=%s seed=%d horizon=%dy max_episodes=%d",
-        experiment_cfg.name, args.model, args.seed, horizon_years, args.max_episodes,
+        experiment_cfg.name,
+        args.model,
+        args.seed,
+        horizon_years,
+        args.max_episodes,
     )
 
     # Build runtime settings (shared across episodes)
@@ -267,7 +293,11 @@ def run_benchmark(args):
         # 3. Restore scratchpad from previous episode
         if episode > 1 and carried_scratchpad:
             _write_scratchpad(db_factory, company_id, carried_scratchpad)
-            logger.info("Restored scratchpad from episode %d (%d chars).", episode - 1, len(carried_scratchpad))
+            logger.info(
+                "Restored scratchpad from episode %d (%d chars).",
+                episode - 1,
+                len(carried_scratchpad),
+            )
 
         # 4. Set up live dashboard + live transcript file
         dashboard = None
@@ -276,22 +306,32 @@ def run_benchmark(args):
 
         # Write live transcript alongside the DB so the streamlit dashboard can read it
         _slug = args.model.replace("/", "_")
-        transcript_path = Path("db") / f"{args.config_name}_{args.seed}_{_slug}.transcript.jsonl"
-        session_messages_path = Path("db") / f"{args.config_name}_{args.seed}_{_slug}.session.json"
+        transcript_path = (
+            Path("db") / f"{args.config_name}_{args.seed}_{_slug}.transcript.jsonl"
+        )
+        session_messages_path = (
+            Path("db") / f"{args.config_name}_{args.seed}_{_slug}.session.json"
+        )
         _is_resume = transcript_path.exists() and session_messages_path.exists()
         if not _is_resume and transcript_path.exists():
             transcript_path.unlink()
 
         # Restore session messages on resume
         if _is_resume:
-            n_restored = runtime.restore_session_messages(session_id, session_messages_path)
+            n_restored = runtime.restore_session_messages(
+                session_id, session_messages_path
+            )
             if n_restored > 0:
                 # Restore run_state turn count from transcript
                 try:
                     prior_lines = transcript_path.read_text().strip().split("\n")
                     prior_turns = len([l for l in prior_lines if l.strip()])
                     run_state.turn_count = prior_turns
-                    logger.info("Resumed: %d prior turns, %d session messages.", prior_turns, n_restored)
+                    logger.info(
+                        "Resumed: %d prior turns, %d session messages.",
+                        prior_turns,
+                        n_restored,
+                    )
                 except Exception:
                     pass
 
@@ -301,14 +341,18 @@ def run_benchmark(args):
                 return
             entry = rs.transcript[-1]
             import json as _json
-            line = _json.dumps({
-                "turn": entry.turn,
-                "timestamp": entry.timestamp,
-                "agent_output": entry.agent_output,
-                "commands_executed": entry.commands_executed,
-                "sim_time": snapshot.get("sim_time", ""),
-                "funds_cents": snapshot.get("funds_cents", 0),
-            }, separators=(",", ":"))
+
+            line = _json.dumps(
+                {
+                    "turn": entry.turn,
+                    "timestamp": entry.timestamp,
+                    "agent_output": entry.agent_output,
+                    "commands_executed": entry.commands_executed,
+                    "sim_time": snapshot.get("sim_time", ""),
+                    "funds_cents": snapshot.get("funds_cents", 0),
+                },
+                separators=(",", ":"),
+            )
             with open(transcript_path, "a") as f:
                 f.write(line + "\n")
             # Save session messages after every turn for crash recovery
@@ -331,7 +375,9 @@ def run_benchmark(args):
             def on_turn(snapshot, rs, commands):
                 dashboard.update(snapshot, rs, commands)
                 _write_live_transcript(snapshot, rs, commands)
+
         else:
+
             def on_turn(snapshot, rs, commands):
                 _write_live_transcript(snapshot, rs, commands)
 
@@ -363,15 +409,24 @@ def run_benchmark(args):
         if max_episodes > 1:
             run_state.finish_episode()
 
-        logger.info("Episode %d finished: reason=%s", episode, run_state.terminal_reason)
+        logger.info(
+            "Episode %d finished: reason=%s", episode, run_state.terminal_reason
+        )
 
         # 7. If not bankruptcy, or last episode, stop
-        if run_state.terminal_reason != TerminalReason.BANKRUPTCY or episode == max_episodes:
+        if (
+            run_state.terminal_reason != TerminalReason.BANKRUPTCY
+            or episode == max_episodes
+        ):
             break
 
         # 8. Save scratchpad for next episode, then reset
         carried_scratchpad = _read_scratchpad(db_factory, company_id)
-        logger.info("Carrying scratchpad to episode %d (%d chars).", episode + 1, len(carried_scratchpad))
+        logger.info(
+            "Carrying scratchpad to episode %d (%d chars).",
+            episode + 1,
+            len(carried_scratchpad),
+        )
 
         # Clear runtime session (fresh conversation history)
         runtime.clear_session(session_id)
@@ -387,7 +442,9 @@ def run_benchmark(args):
     slug = args.model.replace("/", "_")
     results_dir = Path("results")
     results_dir.mkdir(exist_ok=True)
-    results_path = results_dir / f"yc_bench_result_{args.config_name}_{args.seed}_{slug}.json"
+    results_path = (
+        results_dir / f"yc_bench_result_{args.config_name}_{args.seed}_{slug}.json"
+    )
     results_path.write_text(json.dumps(rollout, indent=2))
     logger.info("Full rollout written to %s", results_path)
 
@@ -396,7 +453,10 @@ def run_benchmark(args):
 
 def main(argv=None):
     from dotenv import find_dotenv, load_dotenv
-    load_dotenv(find_dotenv(usecwd=True), override=False)  # searches cwd upward for .env
+
+    load_dotenv(
+        find_dotenv(usecwd=True), override=False
+    )  # searches cwd upward for .env
     args = parse_run_args(argv)
     return run_benchmark(args)
 

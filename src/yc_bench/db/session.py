@@ -13,7 +13,8 @@ def _get_database_url() -> str:
     # Auto-create parent directory for sqlite:/// relative paths
     if url.startswith("sqlite:///") and not url.startswith("sqlite:////"):
         import pathlib
-        db_path = pathlib.Path(url[len("sqlite:///"):])
+
+        db_path = pathlib.Path(url[len("sqlite:///") :])
         db_path.parent.mkdir(parents=True, exist_ok=True)
     return url
 
@@ -37,7 +38,11 @@ def _maybe_register_psycopg_enum_dumpers(url: str) -> None:
         format = Format.TEXT
 
         def dump(self, obj):
-            return obj.value.encode("utf-8") if isinstance(obj, enum.Enum) else str(obj).encode("utf-8")
+            return (
+                obj.value.encode("utf-8")
+                if isinstance(obj, enum.Enum)
+                else str(obj).encode("utf-8")
+            )
 
     from .models.company import Domain
     from .models.event import EventType
@@ -86,8 +91,20 @@ def session_scope(session_factory):
 def init_db(engine) -> None:
     """Create all tables that do not yet exist. Safe to call on every startup."""
     from .base import Base
+
     # Import all models so SQLAlchemy registers them with Base.metadata before create_all.
-    from .models import client, company, employee, event, ledger, scratchpad, session, sim_state, task  # noqa: F401
+    from .models import (
+        client,
+        company,
+        employee,
+        event,
+        ledger,
+        scratchpad,
+        session,
+        sim_state,
+        task,
+    )  # noqa: F401
+
     Base.metadata.create_all(engine)
 
 

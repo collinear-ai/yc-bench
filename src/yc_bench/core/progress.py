@@ -9,28 +9,33 @@ from ..db.models.company import Domain
 from ..db.models.employee import EmployeeSkillRate
 from ..db.models.task import TaskRequirement, Task, TaskAssignment, TaskStatus
 
+
 @dataclass(frozen=True)
 class RequirementState:
     domain: str
     required_qty: Decimal
     completed_qty: Decimal
-    
+
+
 @dataclass(frozen=True)
 class TaskProgressState:
     task_id: str
     status: str
     requirements: tuple[RequirementState, ...]
 
+
 @dataclass(frozen=True)
 class AssignmentState:
     task_id: str
     employee_id: str
+
 
 @dataclass(frozen=True)
 class EmployeeRateState:
     employee_id: str
     domain: str
     rate_domain_per_hour: Decimal
+
 
 @dataclass(frozen=True)
 class ProgressDelta:
@@ -40,6 +45,7 @@ class ProgressDelta:
     before_qty: Decimal
     after_qty: Decimal
 
+
 @dataclass(frozen=True)
 class TaskProgressSummary:
     task_id: str
@@ -47,11 +53,13 @@ class TaskProgressSummary:
     ratio_after: Decimal
     completed: bool
 
+
 @dataclass(frozen=True)
 class EffectiveRate:
     task_id: UUID
     domain: Domain
     rate_per_hour: Decimal
+
 
 def _active_assignment_count(assignments):
     counts = {}
@@ -59,18 +67,23 @@ def _active_assignment_count(assignments):
         counts[a.employee_id] = counts.get(a.employee_id, 0) + 1
     return counts
 
+
 def _rates_by_employee_domain(rates):
     m = {}
     for r in rates:
         m[(r.employee_id, r.domain)] = r.rate_domain_per_hour
     return m
 
-_EFFICIENT_TEAM_SIZE = 4       # first N employees at full rate
-_OVERCROWD_PENALTY = Decimal("0")  # employees beyond N contribute nothing (pure overhead)
+
+_EFFICIENT_TEAM_SIZE = 4  # first N employees at full rate
+_OVERCROWD_PENALTY = Decimal(
+    "0"
+)  # employees beyond N contribute nothing (pure overhead)
 
 
-def _effective_rate_for_task_domain(*, task_id, domain, assignments,
-                                    assignment_counts, base_rates):
+def _effective_rate_for_task_domain(
+    *, task_id, domain, assignments, assignment_counts, base_rates
+):
     """Compute effective rate for one task+domain.
 
     Throughput split is linear: an employee on k concurrent tasks contributes
@@ -103,6 +116,7 @@ def _effective_rate_for_task_domain(*, task_id, domain, assignments,
             total += rate * _OVERCROWD_PENALTY
     return total
 
+
 def _weighted_ratio_from_rows(rows, *, task_id_label):
     total_completed = Decimal("0")
     total_required = Decimal("0")
@@ -118,7 +132,7 @@ def _weighted_ratio_from_rows(rows, *, task_id_label):
             )
         if completed > req.required_qty:
             completed = req.required_qty
-            
+
         total_completed += completed
         total_required += req.required_qty
 
@@ -126,10 +140,12 @@ def _weighted_ratio_from_rows(rows, *, task_id_label):
         return Decimal("0")
     return total_completed / total_required
 
+
 def task_progress_ratio(task):
     if not task.requirements:
         raise ValueError(f"Task {task.task_id} has no requirements")
     return _weighted_ratio_from_rows(task.requirements, task_id_label=task.task_id)
+
 
 def apply_progress_window(*, tasks, assignments, rates, t0, t1):
     hours = Decimal(str(business_hours_between(t0, t1)))
@@ -140,12 +156,14 @@ def apply_progress_window(*, tasks, assignments, rates, t0, t1):
                 task_id=t.task_id,
                 ratio_before=task_progress_ratio(t),
                 ratio_after=task_progress_ratio(t),
-                completed=all(r.completed_qty >= r.required_qty for r in t.requirements),
+                completed=all(
+                    r.completed_qty >= r.required_qty for r in t.requirements
+                ),
             )
             for t in unchanged
         ]
         return unchanged, [], summaries
-    
+
     assignment_list = list(assignments)
     assignment_counts = _active_assignment_count(assignment_list)
     base_rates = _rates_by_employee_domain(rates)
@@ -164,11 +182,13 @@ def apply_progress_window(*, tasks, assignments, rates, t0, t1):
                     task_id=task.task_id,
                     ratio_before=ratio_before,
                     ratio_after=ratio_before,
-                    completed=all(r.completed_qty >= r.required_qty for r in task.requirements),
+                    completed=all(
+                        r.completed_qty >= r.required_qty for r in task.requirements
+                    ),
                 )
             )
             continue
-        
+
         next_requirements = []
         for req in task.requirements:
             before = Decimal(req.completed_qty)
@@ -190,19 +210,23 @@ def apply_progress_window(*, tasks, assignments, rates, t0, t1):
             if after < 0:
                 after = Decimal("0")
 
-            next_requirements.append(RequirementState(
-                domain=req.domain,
-                required_qty=required,
-                completed_qty=after,
-            ))
-        
-            deltas.append(ProgressDelta(
-                task_id=task.task_id,
-                domain=req.domain,
-                delta_qty=after - before,
-                before_qty=before,
-                after_qty=after,
-            ))
+            next_requirements.append(
+                RequirementState(
+                    domain=req.domain,
+                    required_qty=required,
+                    completed_qty=after,
+                )
+            )
+
+            deltas.append(
+                ProgressDelta(
+                    task_id=task.task_id,
+                    domain=req.domain,
+                    delta_qty=after - before,
+                    before_qty=before,
+                    after_qty=after,
+                )
+            )
 
         next_task = TaskProgressState(
             task_id=task.task_id,
@@ -222,31 +246,43 @@ def apply_progress_window(*, tasks, assignments, rates, t0, t1):
         )
     return updated_tasks, deltas, summaries
 
+
 def compute_task_progress_ratio(db, task_id):
     reqs = db.query(TaskRequirement).filter(TaskRequirement.task_id == task_id).all()
     if not reqs:
         return Decimal("0")
     return _weighted_ratio_from_rows(reqs, task_id_label=task_id)
 
+
 def compute_effective_rates(db, company_id):
-    active_tasks = db.query(Task).filter(Task.company_id == company_id, Task.status == TaskStatus.ACTIVE).all()
+    active_tasks = (
+        db.query(Task)
+        .filter(Task.company_id == company_id, Task.status == TaskStatus.ACTIVE)
+        .all()
+    )
     if not active_tasks:
         return []
-    
+
     task_ids = [t.id for t in active_tasks]
-    requirements = db.query(TaskRequirement).filter(TaskRequirement.task_id.in_(task_ids)).all()
-    assignments = db.query(TaskAssignment).filter(TaskAssignment.task_id.in_(task_ids)).all()
+    requirements = (
+        db.query(TaskRequirement).filter(TaskRequirement.task_id.in_(task_ids)).all()
+    )
+    assignments = (
+        db.query(TaskAssignment).filter(TaskAssignment.task_id.in_(task_ids)).all()
+    )
 
     if not assignments:
         out = []
         for req in requirements:
-            out.append(EffectiveRate(
-                task_id=req.task_id,
-                domain=req.domain,
-                rate_per_hour=Decimal("0"),
-            ))
+            out.append(
+                EffectiveRate(
+                    task_id=req.task_id,
+                    domain=req.domain,
+                    rate_per_hour=Decimal("0"),
+                )
+            )
         return out
-    
+
     assignment_counts = {}
     assignments_by_task = {}
     for a in assignments:
@@ -254,7 +290,11 @@ def compute_effective_rates(db, company_id):
         assignment_counts[a.employee_id] = assignment_counts.get(a.employee_id, 0) + 1
 
     employee_ids = list(assignment_counts.keys())
-    skill_rows = db.query(EmployeeSkillRate).filter(EmployeeSkillRate.employee_id.in_(employee_ids)).all()
+    skill_rows = (
+        db.query(EmployeeSkillRate)
+        .filter(EmployeeSkillRate.employee_id.in_(employee_ids))
+        .all()
+    )
 
     base_rates = {}
     for s in skill_rows:
@@ -279,22 +319,37 @@ def compute_effective_rates(db, company_id):
             else:
                 total += rate * _OVERCROWD_PENALTY
 
-        out.append(EffectiveRate(
-            task_id=req.task_id,
-            domain=req.domain,
-            rate_per_hour=total,
-        ))
+        out.append(
+            EffectiveRate(
+                task_id=req.task_id,
+                domain=req.domain,
+                rate_per_hour=total,
+            )
+        )
     return out
 
+
 def flush_progress(db, company_id, t0, t1):
-    active_tasks = db.query(Task).filter(Task.company_id == company_id, Task.status == TaskStatus.ACTIVE).all()
+    active_tasks = (
+        db.query(Task)
+        .filter(Task.company_id == company_id, Task.status == TaskStatus.ACTIVE)
+        .all()
+    )
     if not active_tasks:
         return
     task_ids = [t.id for t in active_tasks]
-    req_rows = db.query(TaskRequirement).filter(TaskRequirement.task_id.in_(task_ids)).all()
-    asg_rows = db.query(TaskAssignment).filter(TaskAssignment.task_id.in_(task_ids)).all()
+    req_rows = (
+        db.query(TaskRequirement).filter(TaskRequirement.task_id.in_(task_ids)).all()
+    )
+    asg_rows = (
+        db.query(TaskAssignment).filter(TaskAssignment.task_id.in_(task_ids)).all()
+    )
     emp_ids = list({a.employee_id for a in asg_rows})
-    rate_rows = db.query(EmployeeSkillRate).filter(EmployeeSkillRate.employee_id.in_(emp_ids)).all()
+    rate_rows = (
+        db.query(EmployeeSkillRate)
+        .filter(EmployeeSkillRate.employee_id.in_(emp_ids))
+        .all()
+    )
 
     reqs_by_task = {}
     req_index = {}
@@ -307,7 +362,7 @@ def flush_progress(db, company_id, t0, t1):
                 completed_qty=Decimal(r.completed_qty),
             )
         )
-    
+
     task_states = [
         TaskProgressState(
             task_id=t.id,
@@ -332,7 +387,13 @@ def flush_progress(db, company_id, t0, t1):
         for s in rate_rows
     ]
 
-    updated_tasks, _, _ = apply_progress_window(tasks=task_states, assignments=assignments_states, rates=employee_rate_states, t0=t0, t1=t1)
+    updated_tasks, _, _ = apply_progress_window(
+        tasks=task_states,
+        assignments=assignments_states,
+        rates=employee_rate_states,
+        t0=t0,
+        t1=t1,
+    )
 
     for ut in updated_tasks:
         for req in ut.requirements:

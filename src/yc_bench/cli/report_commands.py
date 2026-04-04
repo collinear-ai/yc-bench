@@ -24,8 +24,12 @@ def _parse_month(month_str: str) -> date:
 
 @report_app.command("monthly")
 def report_monthly(
-    from_month: Optional[str] = typer.Option(None, "--from-month", help="Start month YYYY-MM"),
-    to_month: Optional[str] = typer.Option(None, "--to-month", help="End month YYYY-MM"),
+    from_month: Optional[str] = typer.Option(
+        None, "--from-month", help="Start month YYYY-MM"
+    ),
+    to_month: Optional[str] = typer.Option(
+        None, "--to-month", help="End month YYYY-MM"
+    ),
 ):
     """View monthly metrics (revenue, cost, return, ending funds)."""
     with get_db() as db:
@@ -58,7 +62,9 @@ def report_monthly(
             for m in metrics
         ]
 
-        json_output({
-            "count": len(results),
-            "months": results,
-        })
+        json_output(
+            {
+                "count": len(results),
+                "months": results,
+            }
+        )

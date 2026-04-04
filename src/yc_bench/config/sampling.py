@@ -12,6 +12,7 @@ normal      mean, stdev, low, high        → gauss, clamped
 uniform     low, high                     → random.uniform
 constant    value                         → always returns value (useful for ablations)
 """
+
 from __future__ import annotations
 
 import random
@@ -19,10 +20,10 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Distribution spec models (one per family)
 # ---------------------------------------------------------------------------
+
 
 class TriangularDist(BaseModel):
     type: Literal["triangular"] = "triangular"
@@ -69,6 +70,7 @@ DistSpec = Annotated[
 # ---------------------------------------------------------------------------
 # Sampling
 # ---------------------------------------------------------------------------
+
 
 def sample_from_spec(rng: random.Random, spec: DistSpec) -> float:
     """Draw one sample from the given distribution spec."""

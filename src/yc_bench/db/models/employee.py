@@ -3,16 +3,27 @@ from __future__ import annotations
 from uuid import uuid4
 
 from decimal import Decimal
-from sqlalchemy import BigInteger, CheckConstraint, Enum as SAEnum, ForeignKey, Numeric, String, Uuid
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Enum as SAEnum,
+    ForeignKey,
+    Numeric,
+    String,
+    Uuid,
+)
 from sqlalchemy.orm import mapped_column
 
 from ..base import Base
 from .company import Domain
 
+
 class Employee(Base):
     __tablename__ = "employees"
     __table_args__ = (
-        CheckConstraint("work_hours_per_day > 0", name="ck_employees_work_hours_per_day_gt_0"),
+        CheckConstraint(
+            "work_hours_per_day > 0", name="ck_employees_work_hours_per_day_gt_0"
+        ),
         CheckConstraint("salary_cents >= 0", name="ck_employees_salary_cents_gte_0"),
     )
 
@@ -45,10 +56,14 @@ class Employee(Base):
         nullable=False,
     )
 
+
 class EmployeeSkillRate(Base):
     __tablename__ = "employee_skill_rates"
     __table_args__ = (
-        CheckConstraint("rate_domain_per_hour >= 0", name="ck_employee_skill_rates_rate_domain_per_hour_gte_0"),
+        CheckConstraint(
+            "rate_domain_per_hour >= 0",
+            name="ck_employee_skill_rates_rate_domain_per_hour_gte_0",
+        ),
     )
 
     employee_id = mapped_column(
@@ -67,5 +82,6 @@ class EmployeeSkillRate(Base):
         nullable=False,
         default=Decimal("1.0000"),
     )
+
 
 __all__ = ["Employee", "EmployeeSkillRate"]

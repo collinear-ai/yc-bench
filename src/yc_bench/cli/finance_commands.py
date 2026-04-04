@@ -23,9 +23,13 @@ def _parse_date(date_str: str) -> datetime:
 
 @finance_app.command("ledger")
 def finance_ledger(
-    from_date: Optional[str] = typer.Option(None, "--from", help="Start date MM/DD/YYYY"),
+    from_date: Optional[str] = typer.Option(
+        None, "--from", help="Start date MM/DD/YYYY"
+    ),
     to_date: Optional[str] = typer.Option(None, "--to", help="End date MM/DD/YYYY"),
-    category: Optional[str] = typer.Option(None, "--category", help="Filter by ledger category"),
+    category: Optional[str] = typer.Option(
+        None, "--category", help="Filter by ledger category"
+    ),
 ):
     """View ledger entries with optional date and category filters."""
     with get_db() as db:
@@ -49,7 +53,9 @@ def finance_ledger(
             try:
                 cat = LedgerCategory(category)
             except ValueError:
-                error_output(f"Invalid category: {category}. Valid: {[c.value for c in LedgerCategory]}")
+                error_output(
+                    f"Invalid category: {category}. Valid: {[c.value for c in LedgerCategory]}"
+                )
             query = query.filter(LedgerEntry.category == cat)
 
         entries = query.order_by(LedgerEntry.occurred_at.asc()).all()
@@ -68,8 +74,10 @@ def finance_ledger(
             for e in entries
         ]
 
-        json_output({
-            "count": len(results),
-            "total_amount_cents": total_amount,
-            "entries": results,
-        })
+        json_output(
+            {
+                "count": len(results),
+                "total_amount_cents": total_amount,
+                "entries": results,
+            }
+        )
