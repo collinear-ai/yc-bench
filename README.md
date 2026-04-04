@@ -119,10 +119,9 @@ Please cite our work if you find it useful!
 
 ```bibtex
 @misc{collinear-ai2025ycbench,
-  author       = {{Collinear AI}},
-  title        = {{YC-Bench}: Your Company Bench — A Long-Horizon Coherence Benchmark for {LLM} Agents},
-  year         = {2025},
+  author    = {He, Muyu and Jain, Adit and Kumar, Anand and Tu, Vincent and Bakshi, Soumyadeep and Patro, Sachin and Rajani, Nazneen},
+  title     = {{YC-Bench}: Benchmarking {AI} Agents for Long-Term Planning and Consistent Execution},
+  year      = {2025},
   howpublished = {\url{https://github.com/collinear-ai/yc-bench}},
-  note         = {Accessed: 2026-02-25}
 }
 ```
