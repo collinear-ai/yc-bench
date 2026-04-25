@@ -17,9 +17,7 @@ from ..tools.run_command_schema import normalize_result
 logger = logging.getLogger(__name__)
 
 litellm.suppress_debug_info = True
-litellm.drop_params = (
-    True  # silently drop unsupported params (e.g. tool_choice for mini/nano models)
-)
+litellm.drop_params = True  # silently drop unsupported params (e.g. tool_choice for mini/nano models)
 
 # Tool schema passed to the LLM on every call
 _RUN_COMMAND_TOOL = {
@@ -155,14 +153,12 @@ class LiteLLMRuntime(AgentRuntime):
             return
         import json as _json
         from pathlib import Path
-
         Path(path).write_text(_json.dumps(session.messages, separators=(",", ":")))
 
     def restore_session_messages(self, session_id: str, path) -> int:
         """Load saved messages into a session. Returns number of messages loaded."""
         import json as _json
         from pathlib import Path
-
         p = Path(path)
         if not p.exists():
             return 0
@@ -170,9 +166,7 @@ class LiteLLMRuntime(AgentRuntime):
             messages = _json.loads(p.read_text())
             session = self._get_or_create_session(session_id)
             session.messages = messages
-            logger.info(
-                "Restored %d messages into session %s.", len(messages), session_id
-            )
+            logger.info("Restored %d messages into session %s.", len(messages), session_id)
             return len(messages)
         except Exception as exc:
             logger.warning("Could not restore session from %s: %s", path, exc)
@@ -198,9 +192,7 @@ class LiteLLMRuntime(AgentRuntime):
         system_prompt = self._settings.system_prompt or SYSTEM_PROMPT
         # Append scratchpad to system prompt (avoids duplication in message history)
         if session.scratchpad:
-            system_prompt = (
-                system_prompt + f"\n\n## Your Scratchpad Notes\n{session.scratchpad}"
-            )
+            system_prompt = system_prompt + f"\n\n## Your Scratchpad Notes\n{session.scratchpad}"
         messages = [{"role": "system", "content": system_prompt}] + session.messages
 
         kwargs = dict(
@@ -230,46 +222,56 @@ class LiteLLMRuntime(AgentRuntime):
             turn_cost = float(cost)
             logger.info(
                 "LLM call: prompt_tokens=%s completion_tokens=%s cost=$%.6f",
-                prompt_tokens,
-                completion_tokens,
-                turn_cost,
+                prompt_tokens, completion_tokens, turn_cost,
             )
 
         message = response.choices[0].message
 
         # Save full turn log for analysis
-        session.turn_logs.append(
-            {
-                "messages_sent": messages,  # full messages array as sent to API
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "cost_usd": turn_cost,
-            }
-        )
+        session.turn_logs.append({
+            "messages_sent": messages,  # full messages array as sent to API
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "cost_usd": turn_cost,
+        })
         tool_calls = getattr(message, "tool_calls", None) or []
+
+        # Some providers (DeepSeek V4 thinking mode via OpenRouter) require
+        # reasoning_content to be present on every assistant turn that had
+        # thinking, even if the value is empty. Capture it via several keys
+        # since LiteLLM normalizes inconsistently across providers.
+        reasoning_content = (
+            getattr(message, "reasoning_content", None)
+            or getattr(message, "reasoning", None)
+            or (message.get("reasoning_content") if hasattr(message, "get") else None)
+            or (message.get("reasoning") if hasattr(message, "get") else None)
+            or ""
+        )
+        is_thinking_provider = self._settings.model.startswith("openrouter/deepseek/") or "deepseek-v" in self._settings.model
 
         tool_calls_made = []
         resume_payload = None
 
         if tool_calls:
             # Persist assistant message with tool calls
-            session.messages.append(
-                {
-                    "role": "assistant",
-                    "content": message.content,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in tool_calls
-                    ],
-                }
-            )
+            asst_msg = {
+                "role": "assistant",
+                "content": message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in tool_calls
+                ],
+            }
+            if reasoning_content or is_thinking_provider:
+                asst_msg["reasoning_content"] = reasoning_content
+            session.messages.append(asst_msg)
 
             for tc in tool_calls:
                 try:
@@ -295,19 +297,20 @@ class LiteLLMRuntime(AgentRuntime):
                     except Exception:
                         pass
 
-                session.messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": tool_result_str,
-                    }
-                )
+                session.messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": tool_result_str,
+                })
 
             cmds = [tc["command"] for tc in tool_calls_made]
             final_output = f"Executed {len(tool_calls)} tool call(s): {', '.join(cmds)}"
         else:
             content = message.content or ""
-            session.messages.append({"role": "assistant", "content": content})
+            asst_msg = {"role": "assistant", "content": content}
+            if reasoning_content or is_thinking_provider:
+                asst_msg["reasoning_content"] = reasoning_content
+            session.messages.append(asst_msg)
             final_output = content
 
         return final_output, tool_calls_made, resume_payload, turn_cost
