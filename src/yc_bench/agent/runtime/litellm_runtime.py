@@ -236,12 +236,25 @@ class LiteLLMRuntime(AgentRuntime):
         })
         tool_calls = getattr(message, "tool_calls", None) or []
 
+        # Some providers (DeepSeek V4 thinking mode via OpenRouter) require
+        # reasoning_content to be present on every assistant turn that had
+        # thinking, even if the value is empty. Capture it via several keys
+        # since LiteLLM normalizes inconsistently across providers.
+        reasoning_content = (
+            getattr(message, "reasoning_content", None)
+            or getattr(message, "reasoning", None)
+            or (message.get("reasoning_content") if hasattr(message, "get") else None)
+            or (message.get("reasoning") if hasattr(message, "get") else None)
+            or ""
+        )
+        is_thinking_provider = self._settings.model.startswith("openrouter/deepseek/") or "deepseek-v" in self._settings.model
+
         tool_calls_made = []
         resume_payload = None
 
         if tool_calls:
             # Persist assistant message with tool calls
-            session.messages.append({
+            asst_msg = {
                 "role": "assistant",
                 "content": message.content,
                 "tool_calls": [
@@ -255,7 +268,10 @@ class LiteLLMRuntime(AgentRuntime):
                     }
                     for tc in tool_calls
                 ],
-            })
+            }
+            if reasoning_content or is_thinking_provider:
+                asst_msg["reasoning_content"] = reasoning_content
+            session.messages.append(asst_msg)
 
             for tc in tool_calls:
                 try:
@@ -291,7 +307,10 @@ class LiteLLMRuntime(AgentRuntime):
             final_output = f"Executed {len(tool_calls)} tool call(s): {', '.join(cmds)}"
         else:
             content = message.content or ""
-            session.messages.append({"role": "assistant", "content": content})
+            asst_msg = {"role": "assistant", "content": content}
+            if reasoning_content or is_thinking_provider:
+                asst_msg["reasoning_content"] = reasoning_content
+            session.messages.append(asst_msg)
             final_output = content
 
         return final_output, tool_calls_made, resume_payload, turn_cost
