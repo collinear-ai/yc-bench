@@ -33,70 +33,110 @@ def company_status():
         if sim_state is None:
             error_output("No simulation found. Run `yc-bench sim init` first.")
 
-        company = db.query(Company).filter(Company.id == sim_state.company_id).one_or_none()
+        company = (
+            db.query(Company).filter(Company.id == sim_state.company_id).one_or_none()
+        )
         if company is None:
             error_output("Company not found.")
 
         # Prestige by domain
-        prestige_rows = db.query(CompanyPrestige).filter(
-            CompanyPrestige.company_id == company.id
-        ).all()
-        prestige_map = {row.domain.value: float(row.prestige_level) for row in prestige_rows}
+        prestige_rows = (
+            db.query(CompanyPrestige)
+            .filter(CompanyPrestige.company_id == company.id)
+            .all()
+        )
+        prestige_map = {
+            row.domain.value: float(row.prestige_level) for row in prestige_rows
+        }
 
         # Task counts
-        active_count = db.query(func.count(Task.id)).filter(
-            Task.company_id == company.id,
-            Task.status == TaskStatus.ACTIVE,
-        ).scalar() or 0
+        active_count = (
+            db.query(func.count(Task.id))
+            .filter(
+                Task.company_id == company.id,
+                Task.status == TaskStatus.ACTIVE,
+            )
+            .scalar()
+            or 0
+        )
 
-        planned_count = db.query(func.count(Task.id)).filter(
-            Task.company_id == company.id,
-            Task.status == TaskStatus.PLANNED,
-        ).scalar() or 0
+        planned_count = (
+            db.query(func.count(Task.id))
+            .filter(
+                Task.company_id == company.id,
+                Task.status == TaskStatus.PLANNED,
+            )
+            .scalar()
+            or 0
+        )
 
-        completed_count = db.query(func.count(Task.id)).filter(
-            Task.company_id == company.id,
-            Task.status.in_([TaskStatus.COMPLETED_SUCCESS, TaskStatus.COMPLETED_FAIL]),
-        ).scalar() or 0
+        completed_count = (
+            db.query(func.count(Task.id))
+            .filter(
+                Task.company_id == company.id,
+                Task.status.in_(
+                    [TaskStatus.COMPLETED_SUCCESS, TaskStatus.COMPLETED_FAIL]
+                ),
+            )
+            .scalar()
+            or 0
+        )
 
-        cancelled_count = db.query(func.count(Task.id)).filter(
-            Task.company_id == company.id,
-            Task.status == TaskStatus.CANCELLED,
-        ).scalar() or 0
+        cancelled_count = (
+            db.query(func.count(Task.id))
+            .filter(
+                Task.company_id == company.id,
+                Task.status == TaskStatus.CANCELLED,
+            )
+            .scalar()
+            or 0
+        )
 
         # Employee count
-        employee_count = db.query(func.count(Employee.id)).filter(
-            Employee.company_id == company.id
-        ).scalar() or 0
+        employee_count = (
+            db.query(func.count(Employee.id))
+            .filter(Employee.company_id == company.id)
+            .scalar()
+            or 0
+        )
 
         # Monthly payroll estimate
-        total_salary = db.query(func.sum(Employee.salary_cents)).filter(
-            Employee.company_id == company.id
-        ).scalar() or 0
+        total_salary = (
+            db.query(func.sum(Employee.salary_cents))
+            .filter(Employee.company_id == company.id)
+            .scalar()
+            or 0
+        )
 
         next_payroll = _next_payroll_date(sim_state.sim_time)
 
         # Bankruptcy risk
-        months_runway = round(float(company.funds_cents) / float(total_salary), 2) if total_salary > 0 else None
+        months_runway = (
+            round(float(company.funds_cents) / float(total_salary), 2)
+            if total_salary > 0
+            else None
+        )
 
-        json_output({
-            "company_id": str(company.id),
-            "company_name": company.name,
-            "funds_cents": company.funds_cents,
-            "prestige": prestige_map,
-            "sim_time": sim_state.sim_time.isoformat(),
-            "horizon_end": sim_state.horizon_end.isoformat(),
-            "tasks": {
-                "active": active_count,
-                "planned": planned_count,
-                "completed": completed_count,
-                "cancelled": cancelled_count,
-            },
-            "employees": employee_count,
-            "next_payroll": next_payroll.isoformat(),
-            "monthly_payroll_cents": total_salary,
-            "risk": {
-                "months_runway": months_runway,
-                "bankrupt": company.funds_cents < 0,
-            },
-        })
+        json_output(
+            {
+                "company_id": str(company.id),
+                "company_name": company.name,
+                "funds_cents": company.funds_cents,
+                "prestige": prestige_map,
+                "sim_time": sim_state.sim_time.isoformat(),
+                "horizon_end": sim_state.horizon_end.isoformat(),
+                "tasks": {
+                    "active": active_count,
+                    "planned": planned_count,
+                    "completed": completed_count,
+                    "cancelled": cancelled_count,
+                },
+                "employees": employee_count,
+                "next_payroll": next_payroll.isoformat(),
+                "monthly_payroll_cents": total_salary,
+                "risk": {
+                    "months_runway": months_runway,
+                    "bankrupt": company.funds_cents < 0,
+                },
+            }
+        )

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .policy import parse_bench_command
 
+
 def _resolve_yc_bench() -> str:
     """Find the yc-bench script in the same directory as the running Python."""
     venv_bin = Path(sys.executable).parent
@@ -15,12 +16,13 @@ def _resolve_yc_bench() -> str:
         return str(candidate)
     return "yc-bench"  # fallback to PATH lookup
 
+
 def run_command(
     command,
     *,
     cwd=None,
     timeout_seconds=60.0,
-    command_exists = None,
+    command_exists=None,
 ):
     ok, err, argv = parse_bench_command(command)
     if not ok:
@@ -62,7 +64,7 @@ def run_command(
             "stdout": proc.stdout,
             "stderr": proc.stderr,
             "sim_time": None,
-            "command": command
+            "command": command,
         }
     except subprocess.TimeoutExpired as exc:
         return {
@@ -82,5 +84,6 @@ def run_command(
             "sim_time": None,
             "command": command,
         }
+
 
 __all__ = ["run_command"]

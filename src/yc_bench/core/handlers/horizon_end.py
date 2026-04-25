@@ -1,4 +1,5 @@
 """Handler for horizon_end events."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

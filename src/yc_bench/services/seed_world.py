@@ -62,7 +62,9 @@ _FIXED_WORLD_SEED = 1  # employees + clients identical across all run seeds
 
 
 def _seed_employees(db, company, req):
-    generated = generate_employees(run_seed=_FIXED_WORLD_SEED, count=req.employee_count, cfg=req.cfg)
+    generated = generate_employees(
+        run_seed=_FIXED_WORLD_SEED, count=req.employee_count, cfg=req.cfg
+    )
     for emp in generated:
         employee = Employee(
             id=uuid4(),
@@ -86,30 +88,45 @@ def _seed_employees(db, company, req):
 
 def _seed_clients(db, company, req):
     """Create Client rows and ClientTrust rows (all starting at 0.0)."""
-    generated = generate_clients(run_seed=_FIXED_WORLD_SEED, count=req.cfg.num_clients, cfg=req.cfg)
+    generated = generate_clients(
+        run_seed=_FIXED_WORLD_SEED, count=req.cfg.num_clients, cfg=req.cfg
+    )
     clients = []
     for gc in generated:
-        client = Client(id=uuid4(), name=gc.name, reward_multiplier=gc.reward_multiplier,
-                       tier=gc.tier, specialty_domains=gc.specialty_domains,
-                       loyalty=gc.loyalty)
+        client = Client(
+            id=uuid4(),
+            name=gc.name,
+            reward_multiplier=gc.reward_multiplier,
+            tier=gc.tier,
+            specialty_domains=gc.specialty_domains,
+            loyalty=gc.loyalty,
+        )
         db.add(client)
         clients.append(client)
-        db.add(ClientTrust(
-            company_id=company.id,
-            client_id=client.id,
-            trust_level=0,
-        ))
+        db.add(
+            ClientTrust(
+                company_id=company.id,
+                client_id=client.id,
+                trust_level=0,
+            )
+        )
     db.flush()
     return clients
 
 
 def _seed_market_tasks(db, company, req, clients):
     # Build specialty list and reward multipliers indexed by client order
-    client_specialties = [c.specialty_domains or [] for c in clients] if clients else None
+    client_specialties = (
+        [c.specialty_domains or [] for c in clients] if clients else None
+    )
     client_reward_mults = [c.reward_multiplier for c in clients] if clients else None
-    generated = generate_tasks(run_seed=req.run_seed, count=req.market_task_count, cfg=req.cfg,
-                               client_specialties=client_specialties,
-                               client_reward_mults=client_reward_mults)
+    generated = generate_tasks(
+        run_seed=req.run_seed,
+        count=req.market_task_count,
+        cfg=req.cfg,
+        client_specialties=client_specialties,
+        client_reward_mults=client_reward_mults,
+    )
     for slot_idx, task in enumerate(generated):
         client = clients[task.client_index % len(clients)] if clients else None
         task_row = Task(

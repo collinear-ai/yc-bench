@@ -28,6 +28,7 @@ Environment variable overrides (applied last, highest priority)::
     YC_BENCH_HISTORY_KEEP_ROUNDS  override agent.history_keep_rounds
     YC_BENCH_AUTO_ADVANCE_TURNS   override loop.auto_advance_after_turns
 """
+
 from __future__ import annotations
 
 import os
@@ -55,6 +56,7 @@ def load_config(path_or_name: str = "default") -> ExperimentConfig:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _read_raw(path_or_name: str) -> dict:
     p = Path(path_or_name)
@@ -115,7 +117,9 @@ def _apply_env_overrides(cfg: ExperimentConfig) -> ExperimentConfig:
         loop_updates["auto_advance_after_turns"] = int(v)
 
     if agent_updates:
-        cfg = cfg.model_copy(update={"agent": cfg.agent.model_copy(update=agent_updates)})
+        cfg = cfg.model_copy(
+            update={"agent": cfg.agent.model_copy(update=agent_updates)}
+        )
     if loop_updates:
         cfg = cfg.model_copy(update={"loop": cfg.loop.model_copy(update=loop_updates)})
     return cfg

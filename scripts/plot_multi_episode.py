@@ -1,9 +1,11 @@
 """Plot multi-episode benchmark: funds over time across episodes + scratchpad evolution."""
+
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timedelta
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -16,14 +18,14 @@ ROOT = Path(__file__).parent.parent
 INITIAL_FUNDS_CENTS = 15_000_000
 
 # ── Collinear brand palette ──────────────────────────────────────────────────
-NAVY     = "#13234D"
-ORANGE   = "#F26125"
-BLUE     = "#4D65FF"
+NAVY = "#13234D"
+ORANGE = "#F26125"
+BLUE = "#4D65FF"
 BG_COLOR = "#FAFBFD"
 GRID_CLR = "#E8ECF2"
 TEXT_CLR = "#2A2F3D"
-MUTED    = "#6B7694"
-CARD_BG  = "#FFFFFF"
+MUTED = "#6B7694"
+CARD_BG = "#FFFFFF"
 
 EP_COLORS = [BLUE, ORANGE, "#22C55E"]
 EP_LABELS = ["Episode 1", "Episode 2", "Episode 3"]
@@ -76,29 +78,64 @@ def load_episode(db_path):
 
 def make_plot(episodes, model_label, seed, config):
     fig = plt.figure(figsize=(20, 12), facecolor=BG_COLOR)
-    gs = gridspec.GridSpec(2, 3, figure=fig, height_ratios=[2.2, 1],
-                           hspace=0.35, wspace=0.3,
-                           left=0.07, right=0.97, top=0.82, bottom=0.06)
+    gs = gridspec.GridSpec(
+        2,
+        3,
+        figure=fig,
+        height_ratios=[2.2, 1],
+        hspace=0.35,
+        wspace=0.3,
+        left=0.07,
+        right=0.97,
+        top=0.82,
+        bottom=0.06,
+    )
 
     # ── Header band ──────────────────────────────────────────────────────
-    header_rect = plt.Rectangle((0, 0.88), 1, 0.12,
-                                transform=fig.transFigure, facecolor=NAVY,
-                                edgecolor="none", zorder=0)
+    header_rect = plt.Rectangle(
+        (0, 0.88),
+        1,
+        0.12,
+        transform=fig.transFigure,
+        facecolor=NAVY,
+        edgecolor="none",
+        zorder=0,
+    )
     fig.patches.append(header_rect)
-    accent_rect = plt.Rectangle((0, 0.875), 1, 0.006,
-                                transform=fig.transFigure, facecolor=ORANGE,
-                                edgecolor="none", zorder=1)
+    accent_rect = plt.Rectangle(
+        (0, 0.875),
+        1,
+        0.006,
+        transform=fig.transFigure,
+        facecolor=ORANGE,
+        edgecolor="none",
+        zorder=1,
+    )
     fig.patches.append(accent_rect)
 
-    fig.text(0.5, 0.94,
-             "YC-Bench  |  Multi-Episode Learning",
-             ha="center", va="center",
-             fontsize=32, fontweight="700", color="white",
-             fontfamily="Helvetica Neue", zorder=2)
-    fig.text(0.5, 0.895,
-             f"{model_label}  |  {config} config  |  seed {seed}  |  {len(episodes)} episodes",
-             ha="center", va="center",
-             fontsize=16, fontweight="400", color="#AABBDD", zorder=2)
+    fig.text(
+        0.5,
+        0.94,
+        "YC-Bench  |  Multi-Episode Learning",
+        ha="center",
+        va="center",
+        fontsize=32,
+        fontweight="700",
+        color="white",
+        fontfamily="Helvetica Neue",
+        zorder=2,
+    )
+    fig.text(
+        0.5,
+        0.895,
+        f"{model_label}  |  {config} config  |  seed {seed}  |  {len(episodes)} episodes",
+        ha="center",
+        va="center",
+        fontsize=16,
+        fontweight="400",
+        color="#AABBDD",
+        zorder=2,
+    )
 
     # ── Top row: funds over time (full width) ────────────────────────────
     ax_funds = fig.add_subplot(gs[0, :])
@@ -112,26 +149,51 @@ def make_plot(episodes, model_label, seed, config):
         survived = f"{ep['duration_months']:.0f}mo"
         label = f"Ep {i+1}: {survived}, {ep['task_success']}W/{ep['task_fail']}L"
 
-        ax_funds.plot(ep["times"], ep["balances"],
-                      color=color, linewidth=2.8, alpha=0.9,
-                      label=label, zorder=3 + i)
-        ax_funds.fill_between(ep["times"], 0, ep["balances"],
-                              color=color, alpha=0.06, zorder=1)
+        ax_funds.plot(
+            ep["times"],
+            ep["balances"],
+            color=color,
+            linewidth=2.8,
+            alpha=0.9,
+            label=label,
+            zorder=3 + i,
+        )
+        ax_funds.fill_between(
+            ep["times"], 0, ep["balances"], color=color, alpha=0.06, zorder=1
+        )
 
         if ep["bankrupt"]:
-            ax_funds.scatter([ep["times"][-1]], [max(ep["balances"][-1], 500)],
-                             color=color, marker="X", s=200,
-                             linewidths=2, edgecolors="white",
-                             alpha=0.9, zorder=5 + i)
+            ax_funds.scatter(
+                [ep["times"][-1]],
+                [max(ep["balances"][-1], 500)],
+                color=color,
+                marker="X",
+                s=200,
+                linewidths=2,
+                edgecolors="white",
+                alpha=0.9,
+                zorder=5 + i,
+            )
 
-    ax_funds.axhline(0, color="#DC2626", linewidth=1.2, linestyle="--", alpha=0.5, zorder=2,
-                     label="Bankruptcy line")
-    ax_funds.set_ylabel("Company Funds ($)", fontsize=14, color=TEXT_CLR, fontweight="500")
+    ax_funds.axhline(
+        0,
+        color="#DC2626",
+        linewidth=1.2,
+        linestyle="--",
+        alpha=0.5,
+        zorder=2,
+        label="Bankruptcy line",
+    )
+    ax_funds.set_ylabel(
+        "Company Funds ($)", fontsize=14, color=TEXT_CLR, fontweight="500"
+    )
     ax_funds.yaxis.set_major_formatter(
         mticker.FuncFormatter(
-            lambda x, _: f"${x/1e6:.1f}M" if x >= 1e6
-            else f"${x/1e3:.0f}K" if x >= 1e3
-            else f"${x:.0f}"
+            lambda x, _: (
+                f"${x/1e6:.1f}M"
+                if x >= 1e6
+                else f"${x/1e3:.0f}K" if x >= 1e3 else f"${x:.0f}"
+            )
         )
     )
     ax_funds.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
@@ -140,11 +202,22 @@ def make_plot(episodes, model_label, seed, config):
     ax_funds.tick_params(colors=MUTED, labelsize=12)
     ax_funds.grid(axis="y", color=GRID_CLR, linewidth=0.7, alpha=0.8)
     ax_funds.grid(axis="x", color=GRID_CLR, linewidth=0.4, alpha=0.4)
-    ax_funds.legend(fontsize=12, facecolor=CARD_BG, edgecolor=GRID_CLR,
-                    labelcolor=TEXT_CLR, loc="upper right",
-                    framealpha=0.95, borderpad=1)
-    ax_funds.set_title("Funds Over Time — Each Episode Starts Fresh",
-                       fontsize=16, fontweight="600", color=TEXT_CLR, pad=12)
+    ax_funds.legend(
+        fontsize=12,
+        facecolor=CARD_BG,
+        edgecolor=GRID_CLR,
+        labelcolor=TEXT_CLR,
+        loc="upper right",
+        framealpha=0.95,
+        borderpad=1,
+    )
+    ax_funds.set_title(
+        "Funds Over Time — Each Episode Starts Fresh",
+        fontsize=16,
+        fontweight="600",
+        color=TEXT_CLR,
+        pad=12,
+    )
 
     # ── Bottom row: 3 scratchpad panels ──────────────────────────────────
     for i, ep in enumerate(episodes):
@@ -161,8 +234,13 @@ def make_plot(episodes, model_label, seed, config):
 
         # Title
         color = EP_COLORS[i % len(EP_COLORS)]
-        ax.set_title(f"Episode {i+1} Scratchpad",
-                     fontsize=13, fontweight="600", color=color, pad=8)
+        ax.set_title(
+            f"Episode {i+1} Scratchpad",
+            fontsize=13,
+            fontweight="600",
+            color=color,
+            pad=8,
+        )
 
         # Scratchpad content (truncated)
         text = ep["scratchpad"].strip()
@@ -180,23 +258,43 @@ def make_plot(episodes, model_label, seed, config):
         if len(wrapped) > 12 or len(lines) < text.count("\n") + 1:
             display += "\n..."
 
-        ax.text(0.05, 0.92, display,
-                transform=ax.transAxes,
-                fontsize=7.5, fontfamily="monospace",
-                color=TEXT_CLR, verticalalignment="top",
-                linespacing=1.4)
+        ax.text(
+            0.05,
+            0.92,
+            display,
+            transform=ax.transAxes,
+            fontsize=7.5,
+            fontfamily="monospace",
+            color=TEXT_CLR,
+            verticalalignment="top",
+            linespacing=1.4,
+        )
 
         # Stats badge
         stats = f"{ep['task_success']}W / {ep['task_fail']}L  |  {ep['duration_months']:.0f} months"
-        ax.text(0.5, 0.02, stats,
-                transform=ax.transAxes, ha="center",
-                fontsize=9, fontweight="600", color=MUTED)
+        ax.text(
+            0.5,
+            0.02,
+            stats,
+            transform=ax.transAxes,
+            ha="center",
+            fontsize=9,
+            fontweight="600",
+            color=MUTED,
+        )
 
     # ── Footer ───────────────────────────────────────────────────────────
-    fig.text(0.5, 0.01,
-             "collinear.ai  |  Multi-Episode YC-Bench: Scratchpad carries over between bankruptcies",
-             ha="center", va="bottom",
-             fontsize=12, fontweight="400", color=MUTED, fontstyle="italic")
+    fig.text(
+        0.5,
+        0.01,
+        "collinear.ai  |  Multi-Episode YC-Bench: Scratchpad carries over between bankruptcies",
+        ha="center",
+        va="bottom",
+        fontsize=12,
+        fontweight="400",
+        color=MUTED,
+        fontstyle="italic",
+    )
 
     out = ROOT / "plots" / "multi_episode_haiku.png"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -219,9 +317,11 @@ if __name__ == "__main__":
         data = load_episode(db_path)
         if data:
             episodes.append(data)
-            print(f"Episode {ep_num}: {data['task_success']}W/{data['task_fail']}L, "
-                  f"survived {data['duration_months']:.1f}mo, "
-                  f"final ${data['final_balance']:,.0f}")
+            print(
+                f"Episode {ep_num}: {data['task_success']}W/{data['task_fail']}L, "
+                f"survived {data['duration_months']:.1f}mo, "
+                f"final ${data['final_balance']:,.0f}"
+            )
 
     if episodes:
         make_plot(episodes, "Claude Haiku 4.5", seed, config)

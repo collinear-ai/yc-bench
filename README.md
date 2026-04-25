@@ -1,8 +1,57 @@
 # <img src="imgs/yc_bench.png" alt="YC-Bench logo" width="40" /> YC-Bench
 
-A long-horizon deterministic benchmark for LLM agents. The agent plays CEO of an AI startup over a simulated 1–3 year run, operating exclusively through a CLI tool against a SQLite-backed discrete-event simulation.
+[![Website](https://img.shields.io/badge/Website-YC--Bench-E8864A)](https://collinear-ai.github.io/yc-bench/)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-The benchmark tests whether agents can manage compounding decisions: prestige specialisation, employee allocation, cash flow, and deadline risk — sustained over hundreds of turns.
+A long-horizon deterministic benchmark for LLM agents. The agent operates a simulated AI startup over a one-year horizon, starting with $200,000 in funds, interacting exclusively through a CLI against a SQLite-backed discrete-event simulation.
+
+The benchmark tests whether agents can manage compounding decisions: task selection, employee allocation, client trust, cash flow, and adversarial client detection — sustained over hundreds of turns.
+
+<p align="center">
+  <img src="docs/static/images/system_architecture.png" alt="YC-Bench System Architecture" width="800" />
+</p>
+
+## How it works
+
+### Core loop
+
+1. Agent calls `sim resume` to advance the clock to the next event (task checkpoint, payroll, or horizon end).
+2. The engine processes task progress, fires due events, and deducts monthly payroll.
+3. Agent receives a status summary with events since the last turn, then issues observe and act commands.
+4. Repeat until bankruptcy (funds < 0) or the one-year horizon ends.
+
+Between time advances, the agent may issue arbitrarily many actions within a single turn. Work progresses only during business hours (weekdays), and payroll is deducted on the first business day of each month.
+
+### Key mechanics
+
+- **Tasks and domains**: The agent earns revenue by completing tasks from a marketplace. Each task belongs to one of four domains — `training · inference · research · data engineering` — and is issued by a client. Tasks have a reward, a deadline (activated on acceptance), and a work quantity employees must complete. Higher prestige unlocks higher-reward tasks and scales their payout. Failing a deadline incurs a 35% penalty of the reward and a prestige reduction.
+- **Employees**: A fixed roster across 3 tiers (junior/mid/senior) with per-domain productivity levels queryable via `employee list`. Productivity distributions are spiky — a senior may have high throughput in training but low in research. Successful completions grant a productivity boost in that domain but also a salary bump, so payroll grows monotonically.
+- **Clients and trust**: Completing tasks for a client builds trust, which reduces future work requirements and unlocks higher-tier tasks. However, completing for one client slightly decays trust with all others.
+- **Adversarial clients**: A subset of clients are adversarial — after acceptance, they inflate work quantities, making deadlines nearly impossible. Adversarial status is hidden. These clients offer competitively high rewards, so the agent must infer adversarial behavior from repeated failures.
+- **Memory**: Conversation history is truncated to the most recent 20 turns. The agent can write to a persistent scratchpad injected into the system prompt every turn — its sole mechanism for retaining information across context truncation.
+
+### Agent CLI
+
+All commands return JSON. The agent interacts via `run_command("yc-bench <cmd>")`.
+
+| Category | Command | Effect |
+|----------|---------|--------|
+| Observe | `company status` | Funds, prestige, payroll |
+| Observe | `employee list` | Names, tiers, salaries, productivity |
+| Observe | `market browse` | Available tasks with client, reward, domains |
+| Observe | `task list` | Accepted tasks with status and progress |
+| Observe | `task inspect --task-id T` | Per-domain progress, deadline, assignments |
+| Observe | `client list` | Client trust levels and tiers |
+| Observe | `client history` | Per-client success/failure counts |
+| Observe | `finance ledger` | Full transaction history |
+| Task | `task accept --task-id T` | Accept from market; starts deadline |
+| Task | `task assign --task-id T --employees E` | Assign employees to task |
+| Task | `task dispatch --task-id T` | Begin work on assigned task |
+| Task | `task cancel --task-id T --reason R` | Abandon task; prestige penalty |
+| Sim | `sim resume` | Advance clock to next event |
+| Memory | `scratchpad write --content C` | Overwrite persistent notes |
+| Memory | `scratchpad append --content C` | Append to persistent notes |
 
 ---
 
@@ -16,8 +65,8 @@ The benchmark tests whether agents can manage compounding decisions: prestige sp
 ### Install
 
 ```bash
-git clone <repo-url>
-cd YC_Bench
+git clone https://github.com/collinear-ai/yc-bench.git
+cd yc-bench
 uv sync
 ```
 
@@ -37,7 +86,7 @@ OPENAI_API_KEY="sk-..."            # for openai/*
 uv run yc-bench run \
   --model gemini/gemini-3-flash-preview \
   --seed 1 \
-  --config medium
+  --config default
 ```
 
 Outputs a SQLite DB in `db/` and a JSON rollout in `results/`.
@@ -45,58 +94,7 @@ Outputs a SQLite DB in `db/` and a JSON rollout in `results/`.
 ### Run multiple models in parallel
 
 ```bash
-bash scripts/run_benchmark.sh --seed 1 --config hard
-```
-
----
-
-## How it works
-
-![YC Bench Architecture](imgs/arch.png "Architecture YC-Bench")
-
-### Core loop
-
-1. Agent calls `yc-bench sim resume` to advance time to the next event or monthly payroll.
-2. The engine flushes task progress, applies prestige decay, fires due events, applies payroll.
-3. Agent reads wake events and decides: accept tasks, assign employees, dispatch, cancel.
-4. Repeat until bankruptcy or horizon end.
-
-The simulation ends on **bankruptcy** (funds < 0 after payroll), **horizon end** (1–3 years), or **max turns** (if configured). If the agent doesn't call `sim resume` for 10 consecutive turns, the loop forces one automatically.
-
-### Key mechanics
-
-- **Funds**: starting capital varies by preset ($80K–$250K). Monthly payroll is deducted automatically. Task rewards scale with prestige (`base × (1 + scale × (prestige − 1))`).
-- **4 domains**: `research · inference · data/environment · training`. Each domain tracks prestige independently in [1.0, 10.0].
-- **Per-domain prestige gating**: a task's required prestige is checked against **each** of its required domains. The agent must climb prestige broadly, not just in one domain.
-- **Prestige decay**: every domain loses prestige daily. Neglected domains decay back toward 1.0. The agent must stay active across domains to maintain market access.
-- **Prestige-scaled work volume**: higher-prestige tasks require proportionally more work. Higher prestige pays more but demands more capacity.
-- **Employees**: 10 employees across 3 tiers (junior/mid/senior). The agent sees only each employee's tier and salary — not their per-domain skill rates. A junior can secretly be a superstar in one domain, so the agent must infer productivity from task progress observations.
-- **Throughput splitting**: an employee assigned to N active tasks has `effective_rate = base_rate / N`. Focus beats breadth.
-- **Task success**: on-time completion awards funds + prestige + skill boosts + 1% salary bump (compounding payroll pressure). Late completion penalises prestige. Cancellation penalises harder.
-- **Progress checkpoints**: the agent is woken at 25%, 50%, 75%, and 100% completion — providing data points to estimate employee productivity.
-- **Scratchpad**: persistent notes in the DB that survive context truncation (only last 20 conversation rounds are kept).
-
-### Agent CLI
-
-All commands return JSON. The agent interacts via `run_command("yc-bench <cmd>")`.
-
-```bash
-# Observe
-yc-bench company status                          # funds, prestige, runway
-yc-bench employee list                           # tier, salary, active tasks
-yc-bench market browse [--domain X] [--limit N]  # available tasks
-yc-bench task list [--status X]                  # your tasks
-yc-bench task inspect --task-id UUID             # progress, deadline, assignments
-yc-bench finance ledger                          # transaction history
-yc-bench report monthly                          # P&L per month
-
-# Act
-yc-bench task accept --task-id UUID              # pull from market
-yc-bench task assign --task-id UUID --employee-id UUID
-yc-bench task dispatch --task-id UUID            # start work
-yc-bench task cancel --task-id UUID --reason ""  # cancel (prestige penalty)
-yc-bench sim resume                              # advance time
-yc-bench scratchpad write/append/clear           # persistent memory
+bash scripts/run_benchmark.sh --seeds "1 2 3" --config default
 ```
 
 ---
@@ -105,23 +103,15 @@ yc-bench scratchpad write/append/clear           # persistent memory
 
 Experiment presets live in `src/yc_bench/config/presets/` as TOML files. Pass the preset name via `--config`.
 
-All presets use 10 employees and 200 market tasks. Difficulty comes from deadline pressure, penalty severity, prestige distribution, and task size.
-
-| Config | Deadline pressure | Prestige mode | What it tests |
-|--------|------------------|---------------|---------------|
-| **tutorial** | Very relaxed | 1 | Basic accept→assign→dispatch loop |
-| **easy** | Relaxed | 1 | Throughput awareness |
-| **medium** | Moderate | 3 | Prestige climbing + domain specialization |
-| **hard** | Tight | 4 | Precise ETA reasoning + capacity planning |
-| **nightmare** | Razor-thin | 5 | Sustained perfection under compounding payroll |
-
 See `default.toml` for the full list of tunable parameters.
 
 ---
 
 ## Benchmark results
 
-*Results pending — re-running benchmarks with updated economics.*
+<p align="center">
+  <img src="docs/static/images/funds_averaged_main.png" alt="Average funds over time" width="700" />
+</p>
 
 ---
 
@@ -129,10 +119,9 @@ Please cite our work if you find it useful!
 
 ```bibtex
 @misc{collinear-ai2025ycbench,
-  author       = {{Collinear AI}},
-  title        = {{YC-Bench}: Your Company Bench — A Long-Horizon Coherence Benchmark for {LLM} Agents},
-  year         = {2025},
+  author    = {He, Muyu and Jain, Adit and Kumar, Anand and Tu, Vincent and Bakshi, Soumyadeep and Patro, Sachin and Rajani, Nazneen},
+  title     = {{YC-Bench}: Benchmarking {AI} Agents for Long-Term Planning and Consistent Execution},
+  year      = {2025},
   howpublished = {\url{https://github.com/collinear-ai/yc-bench}},
-  note         = {Accessed: 2026-02-25}
 }
 ```

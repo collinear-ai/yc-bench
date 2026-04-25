@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+
 class AgentRuntime(ABC):
     @abstractmethod
     def run_turn(self, request):
@@ -18,5 +19,6 @@ class AgentRuntime(ABC):
     def restore_session_messages(self, session_id: str, path) -> int:
         """Restore session messages from file. Returns count. Override in subclass."""
         return 0
+
 
 __all__ = ["AgentRuntime"]

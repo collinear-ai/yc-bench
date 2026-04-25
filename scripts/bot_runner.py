@@ -17,6 +17,7 @@ Usage:
   uv run python scripts/bot_runner.py --bot greedy       # just greedy
   uv run python scripts/bot_runner.py --bot random --seed 1 --config medium
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,7 +42,12 @@ from yc_bench.db.models.employee import Employee, EmployeeSkillRate
 from yc_bench.db.models.event import EventType
 from yc_bench.db.models.sim_state import SimState
 from yc_bench.db.models.task import Task, TaskAssignment, TaskRequirement, TaskStatus
-from yc_bench.db.session import build_engine, build_session_factory, init_db, session_scope
+from yc_bench.db.session import (
+    build_engine,
+    build_session_factory,
+    init_db,
+    session_scope,
+)
 from yc_bench.services.generate_tasks import generate_replacement_task
 from yc_bench.services.rng import RngStreams
 from yc_bench.services.seed_world import SeedWorldRequest, seed_world_transactional
@@ -67,9 +73,9 @@ class CandidateTask:
 # Tier-average rates: E[uniform(0, max_rate)] = max_rate / 2.
 # The LLM agent only sees tier + salary, not actual per-domain rates.
 _TIER_AVG_RATE = {
-    "junior": Decimal("2.0"),   # uniform(0, 4) => E=2.0
-    "mid": Decimal("3.5"),      # uniform(0, 7) => E=3.5
-    "senior": Decimal("5.0"),   # uniform(0, 10) => E=5.0
+    "junior": Decimal("2.0"),  # uniform(0, 4) => E=2.0
+    "mid": Decimal("3.5"),  # uniform(0, 7) => E=3.5
+    "senior": Decimal("5.0"),  # uniform(0, 10) => E=5.0
 }
 
 
@@ -96,8 +102,12 @@ def estimate_completion_hours(task_reqs, employee_tiers, n_concurrent_tasks=1):
 
 def _compute_deadline(accepted_at, max_domain_qty, cfg):
     work_hours = cfg.workday_end_hour - cfg.workday_start_hour
-    biz_days = max(cfg.deadline_min_biz_days, int(max_domain_qty / cfg.deadline_qty_per_day))
-    return add_business_hours(accepted_at, Decimal(str(biz_days)) * Decimal(str(work_hours)))
+    biz_days = max(
+        cfg.deadline_min_biz_days, int(max_domain_qty / cfg.deadline_qty_per_day)
+    )
+    return add_business_hours(
+        accepted_at, Decimal(str(biz_days)) * Decimal(str(work_hours))
+    )
 
 
 def _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers, n_active=0):
@@ -111,16 +121,16 @@ def _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers, n_ac
     """
     from yc_bench.db.models.client import ClientTrust
 
-    prestige_rows = db.query(CompanyPrestige).filter(
-        CompanyPrestige.company_id == company_id
-    ).all()
+    prestige_rows = (
+        db.query(CompanyPrestige).filter(CompanyPrestige.company_id == company_id).all()
+    )
     prestige_map = {p.domain: float(p.prestige_level) for p in prestige_rows}
     max_prestige = max(prestige_map.values()) if prestige_map else 1.0
 
     # Build trust map for trust requirement checks
-    trust_rows = db.query(ClientTrust).filter(
-        ClientTrust.company_id == company_id
-    ).all()
+    trust_rows = (
+        db.query(ClientTrust).filter(ClientTrust.company_id == company_id).all()
+    )
     trust_map = {str(ct.client_id): float(ct.trust_level) for ct in trust_rows}
 
     # Browse full market — bot has direct DB access, no CLI browse limit.
@@ -134,14 +144,13 @@ def _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers, n_ac
 
     candidates = []
     for task in market_tasks:
-        reqs = db.query(TaskRequirement).filter(
-            TaskRequirement.task_id == task.id
-        ).all()
+        reqs = (
+            db.query(TaskRequirement).filter(TaskRequirement.task_id == task.id).all()
+        )
 
         # Per-domain prestige check: all required domains must meet threshold
         meets_prestige = all(
-            prestige_map.get(r.domain, 1.0) >= task.required_prestige
-            for r in reqs
+            prestige_map.get(r.domain, 1.0) >= task.required_prestige for r in reqs
         )
         if not meets_prestige:
             continue
@@ -152,18 +161,28 @@ def _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers, n_ac
             if client_trust < task.required_trust:
                 continue
 
-        task_reqs = [{"domain": r.domain, "required_qty": float(r.required_qty)} for r in reqs]
+        task_reqs = [
+            {"domain": r.domain, "required_qty": float(r.required_qty)} for r in reqs
+        ]
         # Estimate hours accounting for concurrent task split
         concurrent = max(1, n_active + 1)
-        completion_hours = estimate_completion_hours(task_reqs, employee_tiers, n_concurrent_tasks=concurrent)
+        completion_hours = estimate_completion_hours(
+            task_reqs, employee_tiers, n_concurrent_tasks=concurrent
+        )
 
-        candidates.append(CandidateTask(
-            task=task,
-            reward_cents=task.reward_funds_cents,
-            prestige_delta=float(task.reward_prestige_delta),
-            completion_hours=completion_hours if completion_hours is not None else Decimal("999999"),
-            is_completable=True,  # Always accessible = always a candidate
-        ))
+        candidates.append(
+            CandidateTask(
+                task=task,
+                reward_cents=task.reward_funds_cents,
+                prestige_delta=float(task.reward_prestige_delta),
+                completion_hours=(
+                    completion_hours
+                    if completion_hours is not None
+                    else Decimal("999999")
+                ),
+                is_completable=True,  # Always accessible = always a candidate
+            )
+        )
 
     return candidates, max_prestige
 
@@ -173,14 +192,18 @@ def _build_candidates(db, company_id, sim_state, world_cfg, employee_tiers, n_ac
 StrategyFn = Callable  # (completable: list[CandidateTask], context: dict) -> Optional[CandidateTask]
 
 
-def strategy_greedy(candidates: list[CandidateTask], context: dict) -> Optional[CandidateTask]:
+def strategy_greedy(
+    candidates: list[CandidateTask], context: dict
+) -> Optional[CandidateTask]:
     """Pick the task with the highest reward."""
     if not candidates:
         return None
     return max(candidates, key=lambda c: c.reward_cents)
 
 
-def strategy_random(candidates: list[CandidateTask], context: dict) -> Optional[CandidateTask]:
+def strategy_random(
+    candidates: list[CandidateTask], context: dict
+) -> Optional[CandidateTask]:
     """Pick a random accessible task (deterministic via seeded RNG)."""
     if not candidates:
         return None
@@ -190,14 +213,18 @@ def strategy_random(candidates: list[CandidateTask], context: dict) -> Optional[
     return rng.choice(candidates)
 
 
-def strategy_throughput(candidates: list[CandidateTask], context: dict) -> Optional[CandidateTask]:
+def strategy_throughput(
+    candidates: list[CandidateTask], context: dict
+) -> Optional[CandidateTask]:
     """Pick the task with the highest reward per hour."""
     if not candidates:
         return None
     return max(candidates, key=lambda c: Decimal(c.reward_cents) / c.completion_hours)
 
 
-def strategy_prestige(candidates: list[CandidateTask], context: dict) -> Optional[CandidateTask]:
+def strategy_prestige(
+    candidates: list[CandidateTask], context: dict
+) -> Optional[CandidateTask]:
     """Phase 1 (prestige < 5): climb prestige fast. Phase 2: throughput."""
     if not candidates:
         return None
@@ -205,7 +232,10 @@ def strategy_prestige(candidates: list[CandidateTask], context: dict) -> Optiona
     if current_prestige < 5:
         prestige_tasks = [c for c in candidates if c.prestige_delta > 0]
         if prestige_tasks:
-            return max(prestige_tasks, key=lambda c: Decimal(str(c.prestige_delta)) / c.completion_hours)
+            return max(
+                prestige_tasks,
+                key=lambda c: Decimal(str(c.prestige_delta)) / c.completion_hours,
+            )
     return max(candidates, key=lambda c: Decimal(c.reward_cents) / c.completion_hours)
 
 
@@ -218,6 +248,7 @@ STRATEGIES = {
 
 
 # ── Shared simulation runner ───────────────────────────────────────────────
+
 
 def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn):
     """Run a bot strategy on one (config, seed) pair. Returns result dict."""
@@ -290,23 +321,36 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
             if sim_state.sim_time >= sim_state.horizon_end:
                 break
 
-            active_count = db.query(Task).filter(
-                Task.company_id == company_id,
-                Task.status == TaskStatus.ACTIVE,
-            ).count()
+            active_count = (
+                db.query(Task)
+                .filter(
+                    Task.company_id == company_id,
+                    Task.status == TaskStatus.ACTIVE,
+                )
+                .count()
+            )
 
             # Accept up to 1 new task per turn (same pace as LLM agent).
             # The LLM spends multiple tool calls to browse/accept/assign/dispatch
             # one task, so it effectively accepts ~1 per turn.
             newly_accepted = []
-            while active_count + len(newly_accepted) < MAX_CONCURRENT_TASKS and len(newly_accepted) < 1:
-                employees = db.query(Employee).filter(Employee.company_id == company_id).all()
+            while (
+                active_count + len(newly_accepted) < MAX_CONCURRENT_TASKS
+                and len(newly_accepted) < 1
+            ):
+                employees = (
+                    db.query(Employee).filter(Employee.company_id == company_id).all()
+                )
                 employee_tiers = [emp.tier for emp in employees]
                 employee_ids = [emp.id for emp in employees]
 
                 n_will_be_active = active_count + len(newly_accepted)
                 candidates, max_prestige = _build_candidates(
-                    db, company_id, sim_state, world_cfg, employee_tiers,
+                    db,
+                    company_id,
+                    sim_state,
+                    world_cfg,
+                    employee_tiers,
                     n_active=n_will_be_active,
                 )
 
@@ -323,29 +367,45 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                 newly_accepted.append(task.id)
 
                 # Accept the task — same logic as CLI task accept
-                reqs = db.query(TaskRequirement).filter(
-                    TaskRequirement.task_id == task.id
-                ).all()
+                reqs = (
+                    db.query(TaskRequirement)
+                    .filter(TaskRequirement.task_id == task.id)
+                    .all()
+                )
 
                 # Store advertised reward before any modification
                 task.advertised_reward_cents = task.reward_funds_cents
 
                 # Check if RAT client
                 from yc_bench.db.models.client import Client as ClientCheck
+
                 is_rat = False
-                client_row = db.query(ClientCheck).filter(ClientCheck.id == task.client_id).one_or_none() if task.client_id else None
+                client_row = (
+                    db.query(ClientCheck)
+                    .filter(ClientCheck.id == task.client_id)
+                    .one_or_none()
+                    if task.client_id
+                    else None
+                )
                 if client_row and client_row.loyalty < -0.3:
                     is_rat = True
 
                 # Trust work reduction (only for non-RAT clients)
                 if not is_rat and task.client_id is not None:
                     from yc_bench.db.models.client import ClientTrust
-                    ct = db.query(ClientTrust).filter(
-                        ClientTrust.company_id == company_id,
-                        ClientTrust.client_id == task.client_id,
-                    ).one_or_none()
+
+                    ct = (
+                        db.query(ClientTrust)
+                        .filter(
+                            ClientTrust.company_id == company_id,
+                            ClientTrust.client_id == task.client_id,
+                        )
+                        .one_or_none()
+                    )
                     trust_level = float(ct.trust_level) if ct else 0.0
-                    work_reduction = world_cfg.trust_work_reduction_max * (trust_level / world_cfg.trust_max)
+                    work_reduction = world_cfg.trust_work_reduction_max * (
+                        trust_level / world_cfg.trust_max
+                    )
                     for r in reqs:
                         reduced = int(float(r.required_qty) * (1 - work_reduction))
                         r.required_qty = max(200, reduced)
@@ -365,7 +425,9 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                 task.status = TaskStatus.PLANNED
                 task.company_id = company_id
                 task.accepted_at = sim_state.sim_time
-                task.deadline = _compute_deadline(sim_state.sim_time, max_domain_qty, world_cfg)
+                task.deadline = _compute_deadline(
+                    sim_state.sim_time, max_domain_qty, world_cfg
+                )
                 task.advertised_reward_cents = task.reward_funds_cents
 
                 # Scope creep: RAT clients inflate required_qty after accept
@@ -382,6 +444,7 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                 sim_state.replenish_counter = counter + 1
 
                 from yc_bench.db.models.client import Client as ClientModel
+
                 replaced_client_index = 0
                 if task.client_id is not None:
                     clients = db.query(ClientModel).order_by(ClientModel.name).all()
@@ -392,7 +455,11 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
 
                 replacement_spec_domains = None
                 if task.client_id is not None:
-                    orig_client = db.query(ClientModel).filter(ClientModel.id == task.client_id).one_or_none()
+                    orig_client = (
+                        db.query(ClientModel)
+                        .filter(ClientModel.id == task.client_id)
+                        .one_or_none()
+                    )
                     if orig_client:
                         replacement_spec_domains = orig_client.specialty_domains
 
@@ -406,8 +473,14 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                 )
 
                 clients = db.query(ClientModel).order_by(ClientModel.name).all()
-                replacement_client = clients[replacement.client_index % len(clients)] if clients else None
-                replacement_client_id = replacement_client.id if replacement_client else None
+                replacement_client = (
+                    clients[replacement.client_index % len(clients)]
+                    if clients
+                    else None
+                )
+                replacement_client_id = (
+                    replacement_client.id if replacement_client else None
+                )
 
                 replacement_row = Task(
                     id=uuid4(),
@@ -419,26 +492,33 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
                     reward_funds_cents=replacement.reward_funds_cents,
                     reward_prestige_delta=replacement.reward_prestige_delta,
                     skill_boost_pct=replacement.skill_boost_pct,
-                    accepted_at=None, deadline=None, completed_at=None,
-                    success=None, progress_milestone_pct=0,
+                    accepted_at=None,
+                    deadline=None,
+                    completed_at=None,
+                    success=None,
+                    progress_milestone_pct=0,
                     required_trust=replacement.required_trust,
                 )
                 db.add(replacement_row)
                 for domain, qty in replacement.requirements.items():
-                    db.add(TaskRequirement(
-                        task_id=replacement_row.id,
-                        domain=domain,
-                        required_qty=qty,
-                        completed_qty=0,
-                    ))
+                    db.add(
+                        TaskRequirement(
+                            task_id=replacement_row.id,
+                            domain=domain,
+                            required_qty=qty,
+                            completed_qty=0,
+                        )
+                    )
 
                 # Assign ALL employees to this task
                 for eid in employee_ids:
-                    db.add(TaskAssignment(
-                        task_id=task.id,
-                        employee_id=eid,
-                        assigned_at=sim_state.sim_time,
-                    ))
+                    db.add(
+                        TaskAssignment(
+                            task_id=task.id,
+                            employee_id=eid,
+                            assigned_at=sim_state.sim_time,
+                        )
+                    )
                 db.flush()
 
                 task.status = TaskStatus.ACTIVE
@@ -446,9 +526,13 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
 
             # Recalculate ETAs for all newly accepted tasks
             if newly_accepted:
-                recalculate_etas(db, company_id, sim_state.sim_time,
-                                 impacted_task_ids=set(newly_accepted),
-                                 milestones=world_cfg.task_progress_milestones)
+                recalculate_etas(
+                    db,
+                    company_id,
+                    sim_state.sim_time,
+                    impacted_task_ids=set(newly_accepted),
+                    milestones=world_cfg.task_progress_milestones,
+                )
 
             # Now advance time (only if we have active tasks)
             total_active = active_count + len(newly_accepted)
@@ -476,7 +560,6 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
             if adv.bankrupt or adv.horizon_reached:
                 break
 
-
     # Final state + extract time series for plotting
     from yc_bench.runner.extract import extract_time_series
     import json
@@ -488,9 +571,11 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
         final_balance = company.funds_cents
         bankrupt = final_balance < 0
 
-        prestige_rows = db.query(CompanyPrestige).filter(
-            CompanyPrestige.company_id == company_id
-        ).all()
+        prestige_rows = (
+            db.query(CompanyPrestige)
+            .filter(CompanyPrestige.company_id == company_id)
+            .all()
+        )
         max_p = max((float(p.prestige_level) for p in prestige_rows), default=1.0)
 
     time_series = extract_time_series(lambda: session_scope(factory), company_id)
@@ -530,12 +615,21 @@ def run_bot(config_name: str, seed: int, bot_slug: str, strategy_fn: StrategyFn)
 
 def main():
     parser = argparse.ArgumentParser(description="Run YC-Bench bot strategies")
-    parser.add_argument("--bot", choices=list(STRATEGIES.keys()), default=None,
-                        help="Run only this bot (default: all)")
-    parser.add_argument("--config", choices=CONFIGS, default=None,
-                        help="Run only this config (default: all)")
-    parser.add_argument("--seed", type=int, default=None,
-                        help="Run only this seed (default: all)")
+    parser.add_argument(
+        "--bot",
+        choices=list(STRATEGIES.keys()),
+        default=None,
+        help="Run only this bot (default: all)",
+    )
+    parser.add_argument(
+        "--config",
+        choices=CONFIGS,
+        default=None,
+        help="Run only this config (default: all)",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Run only this seed (default: all)"
+    )
     args = parser.parse_args()
 
     bots = [args.bot] if args.bot else list(STRATEGIES.keys())
@@ -558,13 +652,19 @@ def main():
                     tag = "BANKRUPT"
                 else:
                     tag = f"${r['final_balance_cents']/100:,.0f}"
-                print(f"{tag} | {r['tasks_completed']} OK, {r['tasks_failed']} fail | prestige {r['max_prestige']:.1f} | {r['turns']} turns")
+                print(
+                    f"{tag} | {r['tasks_completed']} OK, {r['tasks_failed']} fail | prestige {r['max_prestige']:.1f} | {r['turns']} turns"
+                )
 
-    print(f"\n{'Bot':<16} {'Config':<12} {'Seed':<5} {'Final Balance':>14} {'OK':>4} {'Fail':>5} {'Prestige':>9}")
+    print(
+        f"\n{'Bot':<16} {'Config':<12} {'Seed':<5} {'Final Balance':>14} {'OK':>4} {'Fail':>5} {'Prestige':>9}"
+    )
     print("-" * 70)
     for r in results:
         fb = "BANKRUPT" if r["bankrupt"] else f"${r['final_balance_cents']/100:,.0f}"
-        print(f"{r['bot']:<16} {r['config']:<12} {r['seed']:<5} {fb:>14} {r['tasks_completed']:>4} {r['tasks_failed']:>5} {r['max_prestige']:>8.1f}")
+        print(
+            f"{r['bot']:<16} {r['config']:<12} {r['seed']:<5} {fb:>14} {r['tasks_completed']:>4} {r['tasks_failed']:>5} {r['max_prestige']:>8.1f}"
+        )
 
     bankrupt_count = sum(1 for r in results if r["bankrupt"])
     print(f"\nBankruptcies: {bankrupt_count}/{len(results)}")

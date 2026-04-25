@@ -30,10 +30,20 @@ def _parse_date(date_str: str) -> datetime:
 def sim_init(
     seed: int = typer.Option(..., help="RNG seed for deterministic generation"),
     start_date: str = typer.Option(..., "--start-date", help="Start date MM/DD/YYYY"),
-    horizon_years: int = typer.Option(1, "--horizon-years", help="Simulation horizon in years"),
+    horizon_years: int = typer.Option(
+        1, "--horizon-years", help="Simulation horizon in years"
+    ),
     company_name: str = typer.Option(..., "--company-name", help="Company name"),
-    employee_count: Optional[int] = typer.Option(None, "--employee-count", help="Number of employees (default from experiment config)"),
-    market_task_count: Optional[int] = typer.Option(None, "--market-task-count", help="Number of market tasks (default from experiment config)"),
+    employee_count: Optional[int] = typer.Option(
+        None,
+        "--employee-count",
+        help="Number of employees (default from experiment config)",
+    ),
+    market_task_count: Optional[int] = typer.Option(
+        None,
+        "--market-task-count",
+        help="Number of market tasks (default from experiment config)",
+    ),
 ):
     """Initialize a new simulation: seed world, create company, schedule horizon."""
     _wc = get_world_config()
@@ -49,7 +59,9 @@ def sim_init(
         # Check if a simulation already exists
         existing = db.query(SimState).first()
         if existing is not None:
-            error_output("A simulation already exists. Only one simulation per database is supported.")
+            error_output(
+                "A simulation already exists. Only one simulation per database is supported."
+            )
 
         req = SeedWorldRequest(
             run_seed=seed,
@@ -83,14 +95,16 @@ def sim_init(
         db.add(sim_state)
         db.flush()
 
-        json_output({
-            "simulation_id": str(result.company_id),
-            "company_id": str(result.company_id),
-            "sim_time": start_dt.isoformat(),
-            "horizon_end": horizon_end.isoformat(),
-            "company_name": company_name,
-            "seed": seed,
-        })
+        json_output(
+            {
+                "simulation_id": str(result.company_id),
+                "company_id": str(result.company_id),
+                "sim_time": start_dt.isoformat(),
+                "horizon_end": horizon_end.isoformat(),
+                "company_name": company_name,
+                "seed": seed,
+            }
+        )
 
 
 @sim_app.command("resume")
@@ -108,10 +122,15 @@ def sim_resume():
 
         # Block resume if no active tasks — forces the agent to accept/dispatch first
         from ..db.models.task import Task, TaskStatus
-        active_count = db.query(Task).filter(
-            Task.company_id == sim_state.company_id,
-            Task.status == TaskStatus.ACTIVE,
-        ).count()
+
+        active_count = (
+            db.query(Task)
+            .filter(
+                Task.company_id == sim_state.company_id,
+                Task.status == TaskStatus.ACTIVE,
+            )
+            .count()
+        )
         if active_count == 0:
             error_output(
                 "No active tasks. Accept and dispatch a task before calling sim resume. "
@@ -158,10 +177,14 @@ def sim_resume():
 
             # Only fast-forward past payrolls if there are active tasks waiting.
             # If no active tasks, stop here so the agent can accept new work.
-            active_count = db.query(Task).filter(
-                Task.company_id == sim_state.company_id,
-                Task.status == TaskStatus.ACTIVE,
-            ).count()
+            active_count = (
+                db.query(Task)
+                .filter(
+                    Task.company_id == sim_state.company_id,
+                    Task.status == TaskStatus.ACTIVE,
+                )
+                .count()
+            )
             if active_count == 0:
                 break
 
@@ -180,16 +203,18 @@ def sim_resume():
         elif horizon_reached:
             terminal_reason = "horizon_end"
 
-        json_output({
-            "ok": True,
-            "old_sim_time": sim_state.sim_time.isoformat(),
-            "new_sim_time": sim_state.sim_time.isoformat(),
-            "checkpoint_event_type": last_checkpoint_type,
-            "events_processed": total_events,
-            "payrolls_applied": total_payrolls,
-            "balance_delta": total_balance_delta,
-            "wake_events": all_wake_events,
-            "bankrupt": bankrupt,
-            "horizon_reached": horizon_reached,
-            "terminal_reason": terminal_reason,
-        })
+        json_output(
+            {
+                "ok": True,
+                "old_sim_time": sim_state.sim_time.isoformat(),
+                "new_sim_time": sim_state.sim_time.isoformat(),
+                "checkpoint_event_type": last_checkpoint_type,
+                "events_processed": total_events,
+                "payrolls_applied": total_payrolls,
+                "balance_delta": total_balance_delta,
+                "wake_events": all_wake_events,
+                "bankrupt": bankrupt,
+                "horizon_reached": horizon_reached,
+                "terminal_reason": terminal_reason,
+            }
+        )
