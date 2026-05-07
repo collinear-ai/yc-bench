@@ -28,7 +28,7 @@ description = "1-year benchmark. Tests employee efficiency, client trust, and ad
 model                    = "openrouter/z-ai/glm-5"
 temperature              = 0.0
 top_p                    = 1.0
-request_timeout_seconds  = 300.0
+request_timeout_seconds  = 900.0
 retry_max_attempts       = 3
 retry_backoff_seconds    = 1.0
 
