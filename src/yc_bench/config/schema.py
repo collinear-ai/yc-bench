@@ -86,7 +86,7 @@ class AgentConfig(BaseModel):
     model: str = "openrouter/z-ai/glm-5"
     temperature: float = 0.0
     top_p: float = 1.0
-    request_timeout_seconds: float = 300.0
+    request_timeout_seconds: float = 900.0
     retry_max_attempts: int = 3
     retry_backoff_seconds: float = 1.0
     # Conversation rounds kept in context before each API call; older rounds dropped.
