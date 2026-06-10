@@ -34,6 +34,7 @@ agent.md
 /logs/
 /plots/
 /results/
+all_results/
 
 # Claude session context — local only
 CLAUDE.md
