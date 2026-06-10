@@ -87,6 +87,21 @@
     .chart-wrapper { max-width: 960px; margin: 0 auto; position: relative; }
     .chart-wrapper canvas { width: 100% !important; }
 
+    /* Open/closed source controls */
+    .source-controls { max-width: 960px; margin: 0 auto 16px; display: flex; align-items: center;
+      justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .source-filter { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .source-filter-btn { padding: 7px 16px; border: none; background: #fff; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);
+      border-right: 1px solid var(--border); transition: all 0.15s; }
+    .source-filter-btn:last-child { border-right: none; }
+    .source-filter-btn:hover { background: var(--bg-alt); }
+    .source-filter-btn.active { background: var(--primary); color: #fff; }
+    .source-legend { display: inline-flex; gap: 18px; font-size: 0.82rem; color: var(--text-secondary); }
+    .source-legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .source-swatch { display: inline-block; width: 22px; height: 0; border-top: 3px solid var(--text-secondary); }
+    .source-swatch.dashed { border-top-style: dashed; }
+
     /* Leaderboard */
     .leaderboard-wrapper { max-width: 1100px; margin: 0 auto; }
     .leaderboard-table {
@@ -188,6 +203,13 @@
     <p class="abstract-text">
       As LLM agents tackle increasingly complex tasks, a critical question is whether they can maintain strategic coherence over long horizons: planning under uncertainty, learning from delayed feedback, and adapting when early mistakes compound. We introduce <strong>YC-Bench</strong>, a benchmark that evaluates these capabilities by tasking an agent with running a simulated startup over a one-year horizon spanning hundreds of turns. The agent must manage employees, select task contracts, and maintain profitability in a partially observable environment where adversarial clients and growing payroll create compounding consequences for poor decisions. We evaluate 12 models, both proprietary and open-source, across 3 seeds each. Only three models consistently surpass the starting capital of $200K, with Claude Opus 4.6 achieving the highest average final funds at $1.27M, followed by GLM-5 at $1.21M with 11&times; lower inference cost. Scratchpad usage, the sole mechanism for persisting information across context truncation, is the strongest predictor of success, and adversarial client detection is the primary failure mode, accounting for 47% of bankruptcies. Our analysis reveals that frontier models still fail through distinct failure modes such as over-parallelization, demonstrating the capability gaps for long-horizon performance. YC-Bench is open-source, reproducible, and configurable.
     </p>
+
+    <div class="figure-container" style="margin-top: 48px;">
+      <img src="static/images/reasoning_sweep.png" alt="Reasoning effort vs net worth for Claude Fable 5 and GPT-5.5" class="with-shadow" style="max-width: 780px;" />
+      <p class="figure-caption">
+        <strong>More reasoning is not monotonically better.</strong> Each point is a full benchmark run at a fixed reasoning-effort level (low / medium / high) for the strongest Anthropic (Claude Fable 5) and OpenAI (GPT-5.5) models; the x-axis is the compute budget actually spent (total tokens, log scale). GPT-5.5 peaks at <em>medium</em> effort, while Claude Fable 5 does best at <em>low</em> &mdash; extra thinking can hurt on long-horizon agentic tasks. (Single seed; illustrative.)
+      </p>
+    </div>
   </div>
 </section>
 
@@ -219,22 +241,27 @@
             <tr><td><span class="rank-num">3</span></td><td><div class="model-cell"><span class="model-name">Claude Opus 4.8</span><span class="model-provider">Anthropic</span></div></td><td><span class="funds-value">$1,711,389</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
             <tr><td><span class="rank-num">4</span></td><td><div class="model-cell"><span class="model-name">GLM-5.1</span><span class="model-provider">Zhipu AI</span></div></td><td><span class="funds-value">$1,510,772</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
             <tr><td><span class="rank-num">5</span></td><td><div class="model-cell"><span class="model-name">Claude Opus 4.6</span><span class="model-provider">Anthropic</span></div></td><td><span class="funds-value">$1,269,734</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
-            <tr><td><span class="rank-num">6</span></td><td><div class="model-cell"><span class="model-name">GLM-5</span><span class="model-provider">Zhipu AI</span></div></td><td><span class="funds-value">$1,208,190</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
-            <tr><td><span class="rank-num">7</span></td><td><div class="model-cell"><span class="model-name">GPT-5.5</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$1,206,045</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
-            <tr><td><span class="rank-num">8</span></td><td><div class="model-cell"><span class="model-name">DeepSeek V4 Pro</span><span class="model-provider">DeepSeek</span></div></td><td><span class="funds-value">$1,066,426</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
-            <tr><td><span class="rank-num">9</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$1,000,803</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
-            <tr><td><span class="rank-num">10</span></td><td><div class="model-cell"><span class="model-name">Qwen 3.6 Plus</span><span class="model-provider">Alibaba</span></div></td><td><span class="funds-value">$787,999</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
-            <tr><td><span class="rank-num">11</span></td><td><div class="model-cell"><span class="model-name">Qwen 3.7 Max</span><span class="model-provider">Alibaba</span></div></td><td><span class="funds-value">$629,583</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
-            <tr><td><span class="rank-num">12</span></td><td><div class="model-cell"><span class="model-name">Kimi K2.6</span><span class="model-provider">Moonshot AI</span></div></td><td><span class="funds-value">$511,137</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
-            <tr><td><span class="rank-num">13</span></td><td><div class="model-cell"><span class="model-name">Kimi-K2.5</span><span class="model-provider">Moonshot AI</span></div></td><td><span class="funds-value">$408,822</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
-            <tr><td><span class="rank-num">14</span></td><td><div class="model-cell"><span class="model-name">Gemini 3 Flash</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$393,736</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
-            <tr><td><span class="rank-num">15</span></td><td><div class="model-cell"><span class="model-name">Gemini 3.1 Flash Lite</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$202,899</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
-            <tr><td><span class="rank-num">16</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4 Mini</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$137,649</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
-            <tr><td><span class="rank-num">17</span></td><td><div class="model-cell"><span class="model-name">Claude Sonnet 4.6</span><span class="model-provider">Anthropic</span></div></td><td><span class="funds-value">$104,432</span></td><td><span class="bankrupt-some">2/3</span></td></tr>
-            <tr><td><span class="rank-num">18</span></td><td><div class="model-cell"><span class="model-name">Qwen 3.5-397B</span><span class="model-provider">Alibaba</span></div></td><td><span class="funds-value">$90,787</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
-            <tr><td><span class="rank-num">19</span></td><td><div class="model-cell"><span class="model-name">Gemini 3.1 Pro</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$66,104</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
-            <tr><td><span class="rank-num">20</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4 Nano</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$39,388</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
-            <tr><td><span class="rank-num">21</span></td><td><div class="model-cell"><span class="model-name">Grok 4.20 Beta</span><span class="model-provider">xAI</span></div></td><td><span class="funds-value">$24,874</span></td><td><span class="bankrupt-some">2/3</span></td></tr>
+            <tr><td><span class="rank-num">6</span></td><td><div class="model-cell"><span class="model-name">Xiaomi MiMo v2.5</span><span class="model-provider">Xiaomi</span></div></td><td><span class="funds-value">$1,220,880</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">7</span></td><td><div class="model-cell"><span class="model-name">GLM-5</span><span class="model-provider">Zhipu AI</span></div></td><td><span class="funds-value">$1,208,190</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">8</span></td><td><div class="model-cell"><span class="model-name">GPT-5.5</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$1,206,045</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">9</span></td><td><div class="model-cell"><span class="model-name">DeepSeek V4 Pro</span><span class="model-provider">DeepSeek</span></div></td><td><span class="funds-value">$1,066,426</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">10</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$1,000,803</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">11</span></td><td><div class="model-cell"><span class="model-name">MiniMax M3</span><span class="model-provider">MiniMax</span></div></td><td><span class="funds-value">$999,506</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">12</span></td><td><div class="model-cell"><span class="model-name">Gemini 3.5 Flash</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$987,017</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">13</span></td><td><div class="model-cell"><span class="model-name">Qwen 3.6 Plus</span><span class="model-provider">Alibaba</span></div></td><td><span class="funds-value">$787,999</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">14</span></td><td><div class="model-cell"><span class="model-name">Qwen 3.7 Max</span><span class="model-provider">Alibaba</span></div></td><td><span class="funds-value">$629,583</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">15</span></td><td><div class="model-cell"><span class="model-name">Kimi K2.6</span><span class="model-provider">Moonshot AI</span></div></td><td><span class="funds-value">$511,137</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">16</span></td><td><div class="model-cell"><span class="model-name">Kimi-K2.5</span><span class="model-provider">Moonshot AI</span></div></td><td><span class="funds-value">$408,822</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">17</span></td><td><div class="model-cell"><span class="model-name">Gemini 3 Flash</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$393,736</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">18</span></td><td><div class="model-cell"><span class="model-name">Nemotron 3 Ultra</span><span class="model-provider">NVIDIA</span></div></td><td><span class="funds-value">$326,869</span></td><td><span class="bankrupt-zero">0/3</span></td></tr>
+            <tr><td><span class="rank-num">19</span></td><td><div class="model-cell"><span class="model-name">Gemini 3.1 Flash Lite</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$202,899</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">20</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4 Mini</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$137,649</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">21</span></td><td><div class="model-cell"><span class="model-name">Tencent HY3</span><span class="model-provider">Tencent</span></div></td><td><span class="funds-value">$124,880</span></td><td><span class="bankrupt-some">2/3</span></td></tr>
+            <tr><td><span class="rank-num">22</span></td><td><div class="model-cell"><span class="model-name">Claude Sonnet 4.6</span><span class="model-provider">Anthropic</span></div></td><td><span class="funds-value">$104,432</span></td><td><span class="bankrupt-some">2/3</span></td></tr>
+            <tr><td><span class="rank-num">23</span></td><td><div class="model-cell"><span class="model-name">Qwen 3.5-397B</span><span class="model-provider">Alibaba</span></div></td><td><span class="funds-value">$90,787</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">24</span></td><td><div class="model-cell"><span class="model-name">Gemini 3.1 Pro</span><span class="model-provider">Google</span></div></td><td><span class="funds-value">$66,104</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">25</span></td><td><div class="model-cell"><span class="model-name">GPT-5.4 Nano</span><span class="model-provider">OpenAI</span></div></td><td><span class="funds-value">$39,388</span></td><td><span class="bankrupt-some">1/3</span></td></tr>
+            <tr><td><span class="rank-num">26</span></td><td><div class="model-cell"><span class="model-name">Grok 4.20 Beta</span><span class="model-provider">xAI</span></div></td><td><span class="funds-value">$24,874</span></td><td><span class="bankrupt-some">2/3</span></td></tr>
             <tr><td><span class="rank-num" style="color:#ccc">-</span></td><td><div class="model-cell"><span class="model-name" style="color:var(--text-muted)">Greedy Bot</span><span class="model-provider">Baseline</span></div></td><td><span class="funds-value negative">$0</span></td><td><span class="bankrupt-some">3/3</span></td></tr>
           </tbody>
         </table>
@@ -243,6 +270,17 @@
 
     <!-- Chart tab -->
     <div class="tab-content" id="tab-chart">
+      <div class="source-controls">
+        <div class="source-filter">
+          <button class="source-filter-btn active" onclick="filterSource('all', this)">All</button>
+          <button class="source-filter-btn" onclick="filterSource('closed', this)">Closed</button>
+          <button class="source-filter-btn" onclick="filterSource('open', this)">Open</button>
+        </div>
+        <div class="source-legend">
+          <span><span class="source-swatch solid"></span> Closed-weight</span>
+          <span><span class="source-swatch dashed"></span> Open-weight</span>
+        </div>
+      </div>
       <div class="chart-wrapper">
         <canvas id="fundsChart" height="420"></canvas>
       </div>
@@ -399,6 +437,11 @@ const MODEL_CONFIG = {
   'gpt-5.4-mini':                 { name: 'GPT-5.4 Mini',          color: '#ffd43b', width: 2, logo: 'static/images/logos/openai_logo_icon_248315.png' },
   'claude-sonnet-4-6':            { name: 'Claude Sonnet 4.6',     color: '#e599f7', width: 2, logo: 'static/images/logos/claude-color.png' },
   'qwen3.5-397b':                 { name: 'Qwen 3.5-397B',         color: '#ffa94d', width: 2, logo: 'static/images/logos/Qwen_logo.svg.png' },
+  'mimo-v2.5':                    { name: 'Xiaomi MiMo v2.5',      color: '#0891b2', width: 2, logo: null },
+  'minimax-m3':                   { name: 'MiniMax M3',            color: '#65a30d', width: 2, logo: null },
+  'gemini-3.5-flash':             { name: 'Gemini 3.5 Flash',      color: '#8b5cf6', width: 2, logo: 'static/images/logos/gemini-color.png' },
+  'nemotron-3-ultra-550b-a55b':   { name: 'Nemotron 3 Ultra',      color: '#76b900', width: 2, logo: null },
+  'hy3-preview':                  { name: 'Tencent HY3',           color: '#0ea5e9', width: 2, logo: null },
   'gemini-3.1-pro-preview':       { name: 'Gemini 3.1 Pro',        color: '#00d4aa', width: 2, logo: 'static/images/logos/gemini-color.png' },
   'gpt-5.4-nano':                 { name: 'GPT-5.4 Nano',          color: '#ff8c42', width: 2, logo: 'static/images/logos/openai_logo_icon_248315.png' },
   'grok-4.20-beta':               { name: 'Grok 4.20 Beta',        color: '#69db7c', width: 2, logo: 'static/images/logos/grok.png' },
@@ -484,12 +527,18 @@ const MONTH_KEYS = ['2025-01','2025-02','2025-03','2025-04','2025-05','2025-06',
 
 // Sort order by final funds
 const SORT_ORDER = [
-  'claude-fable-5','claude-opus-4-7','claude-opus-4-8','glm-5.1','claude-opus-4-6','glm-5','gpt-5.5-2026-04-23',
-  'deepseek-v4-pro','gpt-5.4','qwen3.6-plus','qwen3.7-max','kimi-k2.6','kimi-k2.5',
-  'gemini-3-flash-preview','gemini-3.1-flash-lite-preview','gpt-5.4-mini',
-  'claude-sonnet-4-6','qwen3.5-397b','gemini-3.1-pro-preview','gpt-5.4-nano',
+  'claude-fable-5','claude-opus-4-7','claude-opus-4-8','glm-5.1','claude-opus-4-6','mimo-v2.5','glm-5','gpt-5.5-2026-04-23',
+  'deepseek-v4-pro','gpt-5.4','minimax-m3','gemini-3.5-flash','qwen3.6-plus','qwen3.7-max','kimi-k2.6','kimi-k2.5',
+  'gemini-3-flash-preview','nemotron-3-ultra-550b-a55b','gemini-3.1-flash-lite-preview','gpt-5.4-mini',
+  'hy3-preview','claude-sonnet-4-6','qwen3.5-397b','gemini-3.1-pro-preview','gpt-5.4-nano',
   'grok-4.20-beta','greedy_bot'
 ];
+
+// Open-weight models render with a dashed line; closed models solid.
+const OPEN_SOURCE = new Set([
+  'glm-5.1','glm-5','deepseek-v4-pro','qwen3.6-plus','qwen3.7-max','kimi-k2.6','kimi-k2.5',
+  'qwen3.5-397b','minimax-m3','mimo-v2.5','nemotron-3-ultra-550b-a55b','hy3-preview'
+]);
 
 let fundsChart = null;
 
@@ -497,16 +546,19 @@ fetch('static/data.json').then(r => r.json()).then(data => {
   const datasets = SORT_ORDER.filter(k => data[k]).map(key => {
     const cfg = MODEL_CONFIG[key];
     const vals = MONTH_KEYS.map(m => data[key][m] !== undefined ? data[key][m] : 200000);
+    const isOpen = OPEN_SOURCE.has(key);
     return {
       label: cfg.name,
       data: vals,
       borderColor: cfg.color,
       backgroundColor: cfg.color + '18',
       borderWidth: cfg.width,
+      borderDash: isOpen ? [7, 4] : [],   // dashed = open-weight, solid = closed
       pointRadius: 0,
       pointHoverRadius: 5,
       tension: 0.3,
       fill: false,
+      _open: isOpen,                       // for the All/Open/Closed filter
     };
   });
 
@@ -524,6 +576,8 @@ fetch('static/data.json').then(r => r.json()).then(data => {
       plugins: {
         legend: {
           position: 'bottom',
+          onHover: (e) => { e.native.target.style.cursor = 'pointer'; },
+          onLeave: (e) => { e.native.target.style.cursor = 'default'; },
           labels: {
             padding: 20,
             usePointStyle: true,
@@ -574,6 +628,18 @@ fetch('static/data.json').then(r => r.json()).then(data => {
     }
   });
 });
+
+// Filter chart datasets by open / closed weight
+function filterSource(mode, btn) {
+  document.querySelectorAll('.source-filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (!fundsChart) return;
+  fundsChart.data.datasets.forEach((ds, i) => {
+    const hide = mode === 'open' ? !ds._open : mode === 'closed' ? !!ds._open : false;
+    fundsChart.getDatasetMeta(i).hidden = hide;
+  });
+  fundsChart.update();
+}
 
 // Tab switching
 function switchTab(tab) {
