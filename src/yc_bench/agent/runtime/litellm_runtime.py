@@ -6,6 +6,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 import litellm
 
@@ -187,6 +188,89 @@ class LiteLLMRuntime(AgentRuntime):
                     f"LiteLLM call timed out after {self._request_timeout_seconds}s"
                 ) from exc
 
+    def _responses_completion(self, messages, effort):
+        """Call OpenAI's Responses API (required for reasoning_effort + function
+        tools on gpt-5.x) and adapt the result into a chat-completions-shaped
+        response so the rest of the turn loop is unchanged."""
+        instructions = None
+        items = []
+        for m in messages:
+            role = m.get("role")
+            if role == "system":
+                if instructions is None:
+                    instructions = m.get("content") or ""
+                else:
+                    items.append({"role": "system", "content": m.get("content") or ""})
+            elif role == "user":
+                items.append({"role": "user", "content": m.get("content") or ""})
+            elif role == "assistant":
+                if m.get("content"):
+                    items.append({"role": "assistant", "content": m["content"]})
+                for tc in m.get("tool_calls") or []:
+                    items.append({
+                        "type": "function_call",
+                        "call_id": tc["id"],
+                        "name": tc["function"]["name"],
+                        "arguments": tc["function"]["arguments"],
+                    })
+            elif role == "tool":
+                items.append({
+                    "type": "function_call_output",
+                    "call_id": m.get("tool_call_id"),
+                    "output": m.get("content") or "",
+                })
+
+        t = _RUN_COMMAND_TOOL["function"]
+        resp_tools = [{
+            "type": "function",
+            "name": t["name"],
+            "description": t["description"],
+            "parameters": t["parameters"],
+        }]
+
+        rkwargs = dict(
+            model=self._settings.model,
+            input=items,
+            tools=resp_tools,
+            tool_choice="auto",
+            reasoning={"effort": effort},
+            timeout=self._request_timeout_seconds,
+        )
+        if instructions:
+            rkwargs["instructions"] = instructions
+        if self._api_base:
+            rkwargs["api_base"] = self._api_base
+
+        resp = litellm.responses(**rkwargs)
+
+        # Adapt Responses output → chat-style message/usage objects.
+        tool_calls = []
+        content_text = ""
+        for o in getattr(resp, "output", []) or []:
+            otype = getattr(o, "type", None)
+            if otype == "function_call":
+                tool_calls.append(SimpleNamespace(
+                    id=getattr(o, "call_id", None),
+                    function=SimpleNamespace(name=o.name, arguments=o.arguments),
+                ))
+            elif otype == "message":
+                for c in getattr(o, "content", []) or []:
+                    txt = getattr(c, "text", None)
+                    if txt:
+                        content_text += txt
+        message = SimpleNamespace(content=content_text or None, tool_calls=tool_calls or None)
+        u = getattr(resp, "usage", None)
+        usage = SimpleNamespace(
+            prompt_tokens=getattr(u, "input_tokens", 0) or 0,
+            completion_tokens=getattr(u, "output_tokens", 0) or 0,
+        )
+        cost = getattr(u, "cost", None) or 0
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=message)],
+            usage=usage,
+            _hidden_params={"response_cost": cost},
+        )
+
     def _do_turn(self, session):
         """One LLM call + tool execution. Returns (final_output, tool_calls_made, resume_payload, cost_usd)."""
         system_prompt = self._settings.system_prompt or SYSTEM_PROMPT
@@ -204,11 +288,31 @@ class LiteLLMRuntime(AgentRuntime):
         )
         if self._api_base:
             kwargs["api_base"] = self._api_base
+        # Optional reasoning-effort knob, translated per provider.
+        effort = getattr(self._settings, "reasoning_effort", None)
+        model = self._settings.model
+        # OpenAI gpt-5.x reject reasoning_effort + function tools on
+        # /chat/completions and require the Responses API instead.
+        use_responses_api = bool(effort) and model.startswith("openai/")
+        if effort and not use_responses_api:
+            if model.startswith("anthropic/"):
+                # Newer Claude models (e.g. claude-fable-5) use adaptive thinking
+                # with an effort selector rather than reasoning_effort/budget_tokens.
+                kwargs["thinking"] = {"type": "adaptive"}
+                kwargs["output_config"] = {"effort": effort}
+                kwargs["allowed_openai_params"] = ["thinking", "output_config"]
+                kwargs["max_tokens"] = 32000  # headroom for adaptive thinking
+            else:
+                # Others accept the unified reasoning_effort param.
+                kwargs["reasoning_effort"] = effort
         # Let LiteLLM resolve API keys from provider-specific env vars
         # (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, etc.)
         # rather than passing a single key that may not match the provider.
 
-        response = litellm.completion(**kwargs)
+        if use_responses_api:
+            response = self._responses_completion(messages, effort)
+        else:
+            response = litellm.completion(**kwargs)
 
         # Log token usage and cost per call
         turn_cost = 0.0

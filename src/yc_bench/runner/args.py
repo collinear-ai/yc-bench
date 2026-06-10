@@ -15,6 +15,7 @@ class RunArgs:
     config_name: str = "default"
     no_live: bool = False
     max_episodes: int = 1
+    reasoning_effort: str | None = None
 
 
 def build_parser():
@@ -51,6 +52,12 @@ def build_parser():
         default=1,
         help="Max episodes (restarts after bankruptcy with scratchpad carried over). Default: 1",
     )
+    parser.add_argument(
+        "--reasoning-effort",
+        default=None,
+        help="Reasoning-effort level passed to the model (e.g. minimal/low/medium/high/xhigh). "
+        "Omit for provider-default reasoning. Also tags output filenames so sweeps don't collide.",
+    )
     return parser
 
 
@@ -67,6 +74,7 @@ def parse_run_args(argv):
         config_name=ns.config_name,
         no_live=ns.no_live,
         max_episodes=ns.max_episodes,
+        reasoning_effort=ns.reasoning_effort,
     )
 
 

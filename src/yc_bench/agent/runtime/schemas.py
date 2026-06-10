@@ -15,6 +15,10 @@ class RuntimeSettings:
     history_keep_rounds: int = 20
     # Optional system prompt override; None = use default from agent/prompt.py
     system_prompt: str | None = None
+    # Optional reasoning-effort knob, passed through to litellm (translated per
+    # provider: OpenAI reasoning_effort, Anthropic thinking budget, etc.).
+    # None = provider default reasoning.
+    reasoning_effort: str | None = None
 
 
 @dataclass(frozen=True)
