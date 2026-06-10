@@ -483,14 +483,14 @@ const logoPlugin = {
     chart.data.datasets.forEach((ds, i) => {
       const meta = chart.getDatasetMeta(i);
       if (meta.hidden) return;
-      const img = logoImages[ds.label];
-      if (!img || !img.complete) return;
       const lastPt = meta.data[meta.data.length - 1];
       if (!lastPt) return;
       const radius = 13;
       const border = 2.5;
       const cx = lastPt.x;
       const cy = lastPt.y;
+      const img = logoImages[ds.label];
+      const hasLogo = img && img.complete && img.naturalWidth > 0;
 
       ctx.save();
       // Outer circle (colored border)
@@ -505,11 +505,22 @@ const logoPlugin = {
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
-      // Clip to circle and draw logo
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius - 1, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(img, cx - radius + 1, cy - radius + 1, (radius - 1) * 2, (radius - 1) * 2);
+      if (hasLogo) {
+        // Clip to circle and draw logo
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 1, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(img, cx - radius + 1, cy - radius + 1, (radius - 1) * 2, (radius - 1) * 2);
+        ctx.restore();
+      } else {
+        // Monogram fallback (model initial) for models without a logo asset
+        ctx.fillStyle = ds.borderColor;
+        ctx.font = "700 13px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText((ds.label[0] || "?").toUpperCase(), cx, cy + 0.5);
+      }
       ctx.restore();
     });
   }
