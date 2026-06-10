@@ -207,7 +207,7 @@
     <div class="figure-container" style="margin-top: 48px;">
       <img src="static/images/reasoning_sweep.png" alt="Reasoning effort vs net worth for Claude Fable 5 and GPT-5.5" class="with-shadow" style="max-width: 780px;" />
       <p class="figure-caption">
-        <strong>More reasoning is not monotonically better.</strong> Each point is a full benchmark run at a fixed reasoning-effort level (low / medium / high) for the strongest Anthropic (Claude Fable 5) and OpenAI (GPT-5.5) models; the x-axis is the compute budget actually spent (total tokens, log scale). GPT-5.5 peaks at <em>medium</em> effort, while Claude Fable 5 does best at <em>low</em> &mdash; extra thinking can hurt on long-horizon agentic tasks. (Single seed; illustrative.)
+        <strong>More reasoning is not monotonically better.</strong> Each point is a full benchmark run at a fixed reasoning-effort level (low / medium / high) for the strongest Anthropic (Claude Fable 5) and OpenAI (GPT-5.5) models; the x-axis is the reasoning compute spent &mdash; output/thinking tokens, which rise monotonically with effort (total tokens are dominated by re-sent context and don't reflect effort). GPT-5.5 peaks at <em>medium</em> effort, while Claude Fable 5 does best at <em>low</em> &mdash; extra thinking can hurt on long-horizon agentic tasks. (Single seed; illustrative.)
       </p>
     </div>
   </div>
