@@ -128,6 +128,12 @@ def run_command_cli(
         "--max-episodes",
         help="Max episodes (restarts after bankruptcy with scratchpad carried over). Default: 1",
     ),
+    reasoning_effort: Optional[str] = typer.Option(
+        None,
+        "--reasoning-effort",
+        help="Reasoning-effort level (e.g. low/medium/high/max). Omit for provider default. "
+        "Tags output filenames so sweeps don't collide.",
+    ),
 ):
     """Run a full benchmark: migrate DB, seed world, run agent loop to completion."""
     from dotenv import find_dotenv, load_dotenv
@@ -146,6 +152,7 @@ def run_command_cli(
         config_name=config_name,
         no_live=no_live,
         max_episodes=max_episodes,
+        reasoning_effort=reasoning_effort,
     )
     raise SystemExit(run_benchmark(args))
 

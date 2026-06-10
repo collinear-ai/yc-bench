@@ -172,6 +172,8 @@ def _redirect_all_logging_to_file(log_file: Path) -> None:
 def _build_db_url(args, episode: int, max_episodes: int) -> str:
     """Build SQLite DATABASE_URL, adding episode suffix when multi-episode."""
     slug = args.model.replace("/", "_")
+    if args.reasoning_effort:
+        slug = f"{slug}_re-{args.reasoning_effort}"
     db_dir = Path("db")
     db_dir.mkdir(exist_ok=True)
     base = f"{args.config_name}_{args.seed}_{slug}"
@@ -256,6 +258,7 @@ def run_benchmark(args):
         retry_backoff_seconds=agent_cfg.retry_backoff_seconds,
         history_keep_rounds=agent_cfg.history_keep_rounds,
         system_prompt=agent_cfg.system_prompt,
+        reasoning_effort=args.reasoning_effort,
     )
     runtime = build_runtime(settings, command_executor=run_command)
 
@@ -306,6 +309,8 @@ def run_benchmark(args):
 
         # Write live transcript alongside the DB so the streamlit dashboard can read it
         _slug = args.model.replace("/", "_")
+        if args.reasoning_effort:
+            _slug = f"{_slug}_re-{args.reasoning_effort}"
         transcript_path = (
             Path("db") / f"{args.config_name}_{args.seed}_{_slug}.transcript.jsonl"
         )
@@ -440,6 +445,8 @@ def run_benchmark(args):
     logger.info("Run complete: %s", json.dumps(summary, indent=2))
 
     slug = args.model.replace("/", "_")
+    if args.reasoning_effort:
+        slug = f"{slug}_re-{args.reasoning_effort}"
     results_dir = Path("results")
     results_dir.mkdir(exist_ok=True)
     results_path = (
