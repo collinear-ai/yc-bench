@@ -203,13 +203,6 @@
     <p class="abstract-text">
       As LLM agents tackle increasingly complex tasks, a critical question is whether they can maintain strategic coherence over long horizons: planning under uncertainty, learning from delayed feedback, and adapting when early mistakes compound. We introduce <strong>YC-Bench</strong>, a benchmark that evaluates these capabilities by tasking an agent with running a simulated startup over a one-year horizon spanning hundreds of turns. The agent must manage employees, select task contracts, and maintain profitability in a partially observable environment where adversarial clients and growing payroll create compounding consequences for poor decisions. We evaluate 12 models, both proprietary and open-source, across 3 seeds each. Only three models consistently surpass the starting capital of $200K, with Claude Opus 4.6 achieving the highest average final funds at $1.27M, followed by GLM-5 at $1.21M with 11&times; lower inference cost. Scratchpad usage, the sole mechanism for persisting information across context truncation, is the strongest predictor of success, and adversarial client detection is the primary failure mode, accounting for 47% of bankruptcies. Our analysis reveals that frontier models still fail through distinct failure modes such as over-parallelization, demonstrating the capability gaps for long-horizon performance. YC-Bench is open-source, reproducible, and configurable.
     </p>
-
-    <div class="figure-container" style="margin-top: 48px;">
-      <img src="static/images/reasoning_sweep.png" alt="Reasoning effort vs net worth for Claude Fable 5 and GPT-5.5" class="with-shadow" style="max-width: 780px;" />
-      <p class="figure-caption">
-        <strong>More reasoning is not monotonically better.</strong> Each point is a full benchmark run at a fixed reasoning-effort level (low / medium / high) for the strongest Anthropic (Claude Fable 5) and OpenAI (GPT-5.5) models; the x-axis is the reasoning compute spent &mdash; output/thinking tokens, which rise monotonically with effort (total tokens are dominated by re-sent context and don't reflect effort). GPT-5.5 peaks at <em>medium</em> effort, while Claude Fable 5 does best at <em>low</em> &mdash; extra thinking can hurt on long-horizon agentic tasks. (Single seed; illustrative.)
-      </p>
-    </div>
   </div>
 </section>
 
