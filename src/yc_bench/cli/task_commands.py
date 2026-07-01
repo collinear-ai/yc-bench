@@ -702,13 +702,14 @@ def task_cancel(
         # Set status to cancelled
         task.status = TaskStatus.CANCELLED
 
-        # Drop pending events for this task
+        # Drop pending events for this task. Filter on dedupe_key (task:{tid}:*)
+        # rather than payload — payload is generic JSON and `.astext` is JSONB-only.
         pending_events = (
             db.query(SimEvent)
             .filter(
                 SimEvent.company_id == sim_state.company_id,
                 SimEvent.consumed == False,
-                SimEvent.payload["task_id"].astext == str(tid),
+                SimEvent.dedupe_key.like(f"task:{tid}:%"),
             )
             .all()
         )
