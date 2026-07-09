@@ -708,7 +708,7 @@ def task_cancel(
             .filter(
                 SimEvent.company_id == sim_state.company_id,
                 SimEvent.consumed == False,
-                SimEvent.payload["task_id"].astext == str(tid),
+                SimEvent.payload["task_id"].as_string() == str(tid),
             )
             .all()
         )
