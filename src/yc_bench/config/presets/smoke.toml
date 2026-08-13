@@ -1,0 +1,9 @@
+# smoke.toml — wiring validation only, NOT for benchmark results.
+# Identical world to `default`; stops after a handful of turns.
+extends = "default"
+
+name        = "smoke"
+description = "Wiring smoke test: default world, hard turn cap."
+
+[loop]
+max_turns = 6
