@@ -264,7 +264,14 @@ class LiteLLMRuntime(AgentRuntime):
             prompt_tokens=getattr(u, "input_tokens", 0) or 0,
             completion_tokens=getattr(u, "output_tokens", 0) or 0,
         )
-        cost = getattr(u, "cost", None) or 0
+        # LiteLLM puts the cost of a non-streaming Responses call in
+        # _hidden_params["response_cost"], not on the usage object. Only the
+        # streaming path ever sets usage.cost, so reading usage first reports 0.
+        hidden = getattr(resp, "_hidden_params", None) or {}
+        cost = hidden.get("response_cost")
+        if cost is None:
+            cost = getattr(u, "cost", None)
+        cost = cost or 0
         return SimpleNamespace(
             choices=[SimpleNamespace(message=message)],
             usage=usage,
