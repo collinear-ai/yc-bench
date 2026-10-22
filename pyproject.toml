@@ -13,7 +13,7 @@ dependencies = [
     "typer>=0.9",
     "sqlalchemy>=2.0",
     "pydantic>=2.0",
-    "litellm>=1.40",
+    "litellm>=1.40,<=1.106.0",
     "python-dotenv>=1.0",
     "matplotlib>=3.10.8",
     "streamlit>=1.55.0",

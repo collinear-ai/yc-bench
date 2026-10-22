@@ -2521,7 +2521,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "litellm", specifier = ">=1.40" },
+    { name = "litellm", specifier = ">=1.40,<=1.106.0" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "plotly", specifier = ">=6.6.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.1" },
