@@ -36,6 +36,11 @@ agent.md
 /results/
 all_results/
 
+# Policy-as-code experiment artifacts (regenerable, large)
+/policies/
+/policies_*/
+/results_*/
+
 # Claude session context — local only
 CLAUDE.md
 old/
