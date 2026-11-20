@@ -311,12 +311,13 @@ def run_benchmark(args):
         _slug = args.model.replace("/", "_")
         if args.reasoning_effort:
             _slug = f"{_slug}_re-{args.reasoning_effort}"
-        transcript_path = (
-            Path("db") / f"{args.config_name}_{args.seed}_{_slug}.transcript.jsonl"
-        )
-        session_messages_path = (
-            Path("db") / f"{args.config_name}_{args.seed}_{_slug}.session.json"
-        )
+        # One pair of files per episode, like the DB. Shared names made episode N+1
+        # look like a resume of episode N and reload its chat history.
+        _base = f"{args.config_name}_{args.seed}_{_slug}"
+        if max_episodes > 1:
+            _base = f"{_base}.ep{episode}"
+        transcript_path = Path("db") / f"{_base}.transcript.jsonl"
+        session_messages_path = Path("db") / f"{_base}.session.json"
         _is_resume = transcript_path.exists() and session_messages_path.exists()
         if not _is_resume and transcript_path.exists():
             transcript_path.unlink()
